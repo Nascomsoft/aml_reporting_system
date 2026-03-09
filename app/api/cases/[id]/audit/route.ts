@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 
-let timeline: Array<{ event: string; user: string; timestamp: string; ip?: string }> = [];
+const timeline: Array<{ event: string; user: string; timestamp: string; ip?: string }> = [];
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET() {
   return NextResponse.json({ timeline });
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request) {
   const body = await request.json();
   const { event, user, ip } = body || {};
   timeline.push({ event, user, timestamp: new Date().toISOString(), ip });
