@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+// correct relative path to shared API service and export types
 import {
     amlAPI,
     useAsync,
@@ -12,7 +13,7 @@ import {
     TrendDataResponse,
     AlertLifecycleResponse,
     InstitutionRiskResponse,
-} from "../AML_frontend/services/api";
+} from "../../../AML_frontend/services/api";
 
 type Role = "bank" | "regulator" | "admin";
 
@@ -32,6 +33,7 @@ function severityColor(s: string) {
 export default function Dashboard() {
 	const [role, setRole] = useState<Role>("bank");
     const [lastUpdate, setLastUpdate] = useState<string>("");
+	// add explicit generics so returned data is correctly typed
 	const kpi = useAsync<KPIResponse>(() => amlAPI.getKPISummary());
 	const topAlerts = useAsync<AlertsListResponse>(() => amlAPI.getTopAlerts(5));
 	const realtime = useAsync<RealTimeIndicatorsResponse>(() => amlAPI.getRealTimeIndicators());
@@ -81,9 +83,8 @@ export default function Dashboard() {
 				<div style={{ padding: 12, background: "#111827", color: "white", borderRadius: 6 }}>
 					<div style={{ fontSize: 12, opacity: 0.8 }}>Overdue Cases</div>
 					<div style={{ fontSize: 20, fontWeight: 700, color: d.overdueCases ? "#ef4444" : "#10b981" }}>{d.overdueCases}</div>
-					<div style={{ fontSize: 12, marginTop: 6, color: "white" }}>SLA: {d.slaCountdown}</div>
+					<div style={{ fontSize: 12, marginTop: 6, color:"white" }}>SLA: {d.slaCountdown }</div>
 				</div>
-
 				<div style={{ padding: 12, background: "#111827", color: "white", borderRadius: 6 }}>
 					<div style={{ fontSize: 12, opacity: 0.8 }}>STR Submitted Today</div>
 					<div style={{ fontSize: 20, fontWeight: 700 }}>{d.strSubmittedToday}</div>
@@ -212,7 +213,7 @@ export default function Dashboard() {
 							<div style={{ display: "flex", gap: 8 }}>
 								{lifecycle.data ? (
 									Object.entries(lifecycle.data as AlertLifecycleResponse)
-									.map(([k, v]: [string, number]) => (
+								.map(([k, v]: [string, number]) => (
 										<div key={k} style={{ flex: 1, padding: 8, background: "#06121a", borderRadius: 6 }}>
 											<div style={{ fontSize: 12, opacity: 0.7 }}>{k}</div>
 											<div style={{ fontWeight: 700, fontSize: 18 }}>{v}</div>
@@ -289,3 +290,4 @@ export default function Dashboard() {
 		</div>
 	);
 }
+

@@ -25,9 +25,25 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased flex`}
       >
-        {children}
+        {/* sidebar navigation */}
+        <nav style={{ width: 200, background: '#0b1220', color: '#e5e7eb', minHeight: '100vh', padding: '20px 10px' }}>
+          <h2 style={{ fontSize: 18, marginBottom: 20 }}>AML System</h2>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, lineHeight: 2 }}>
+            <li><a href="/" style={{ color: 'inherit', textDecoration: 'none' }}>Dashboard</a></li>
+            <li><a href="/str" style={{ color: 'inherit', textDecoration: 'none' }}>STR Module</a></li>
+            <li><a href="/admin" style={{ color: 'inherit', textDecoration: 'none' }}>Admin Management</a></li>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, lineHeight: 2 }}>
+              <li><a href="/alert_management" style={{ color: 'inherit', textDecoration: 'none' }}>Alert Management</a></li>
+            <li><a href="/case_management" style={{ color: 'inherit', textDecoration: 'none' }}>Case Management</a></li>
+            <li><a href="/regulator" style={{ color: 'inherit', textDecoration: 'none' }}>Regulator</a></li>
+            </ul>
+          </ul>
+        </nav>
+        <main style={{ flex: 1 }}>
+          {children}
+        </main>
       </body>
     </html>
   );

@@ -232,19 +232,6 @@ export const amlAPI = {
   },
 
   /**
-   * Escalate case to regulator (e.g. send for review / create regulator ticket)
-   * PATCH /api/cases/:id/escalate
-   */
-  escalateCaseToRegulator: async (id: string, reason?: string): Promise<void> => {
-    const response = await fetch(`${API_BASE_URL}/cases/${encodeURIComponent(id)}/escalate`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason }),
-    });
-    if (!response.ok) throw new Error('Failed to escalate case');
-  },
-
-  /**
    * Discussion entries
    */
   postCaseDiscussion: async (id: string, message: string): Promise<void> => {
