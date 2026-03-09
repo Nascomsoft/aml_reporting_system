@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 
-let entries: Array<{ user: string; message: string; timestamp: string }> = [];
+const entries: Array<{ user: string; message: string; timestamp: string }> = [];
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET() {
   return NextResponse.json({ entries });
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request) {
   const body = await request.json();
   const { message } = body || {};
   entries.push({ user: 'system', message, timestamp: new Date().toISOString() });

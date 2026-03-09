@@ -12,10 +12,10 @@ export async function GET(request: Request) {
   const detectionType = url.searchParams.get('detectionType');
   const lifecycleStage = url.searchParams.get('lifecycleStage');
   const institution = url.searchParams.get('institution');
-  const dateFrom = url.searchParams.get('dateFrom');
-  const dateTo = url.searchParams.get('dateTo');
-  const amountMin = url.searchParams.get('amountMin');
-  const amountMax = url.searchParams.get('amountMax');
+  // const dateFrom = url.searchParams.get('dateFrom');
+  // const dateTo = url.searchParams.get('dateTo');
+  // const amountMin = url.searchParams.get('amountMin');
+  // const amountMax = url.searchParams.get('amountMax');
 
   // In a real implementation, these params would be applied to a database query.
   // For now we return dummy alerts that echo the filters for visibility.
