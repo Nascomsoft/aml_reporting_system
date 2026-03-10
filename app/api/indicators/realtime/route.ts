@@ -1,16 +1,44 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { handleApiError } from "@/lib/errorHandler";
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+    const [
+      liveNotifications,
+      edgeDetectionCount,
+      coreDetectionCount,
+      recentlyEscalated,
+      approachingSLA,
+    ] = await Promise.all([
+      prisma.notification.count({ where: { isRead: false } }),
+      prisma.alert.count({ where: { detectionType: "EDGE" } }),
+      prisma.alert.count({ where: { detectionType: "CORE" } }),
+      prisma.alert.count({
+        where: {
+          lifecycleStage: "ESCALATED",
+          updatedAt: { gte: oneHourAgo },
+        },
+      }),
+      prisma.case.count({
+        where: {
+          slaRemainingHours: { lte: 4 },
+          overdue: false,
+          status: { not: "CLOSED" },
+        },
+      }),
+    ]);
+
     return NextResponse.json({
-      liveNotifications: Math.floor(Math.random() * 20),
-      edgeDetectionCount: Math.floor(Math.random() * 200),
-      coreDetectionCount: Math.floor(Math.random() * 500),
-      recentlyEscalated: Math.floor(Math.random() * 10),
-      approachingSLA: Math.floor(Math.random() * 5),
+      liveNotifications,
+      edgeDetectionCount,
+      coreDetectionCount,
+      recentlyEscalated,
+      approachingSLA,
     });
-  } catch (err) {
-    console.error('realtime indicator route error', err);
-    return new NextResponse('Internal error', { status: 500 });
+  } catch (error) {
+    return handleApiError(error);
   }
 }

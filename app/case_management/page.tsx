@@ -1,10 +1,14 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { amlAPI, CaseRecord } from "../../AML_frontend/services/api";
 
+interface CaseListItem extends CaseRecord {
+  caseNumber?: string;
+}
 
 export default function CaseManagement() {
+  const [cases, setCases] = useState<CaseListItem[]>([]);
   const [caseData, setCaseData] = useState<CaseRecord | null>(null);
   const [newStatus, setNewStatus] = useState<CaseRecord["status"]>("new");
   const [discussion, setDiscussion] = useState<string[]>([]);
@@ -13,6 +17,7 @@ export default function CaseManagement() {
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState<string>("");
   const [audit, setAudit] = useState<string[]>([]);
+  const [loadingList, setLoadingList] = useState(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const buttonBaseStyle: React.CSSProperties = {
@@ -24,23 +29,38 @@ export default function CaseManagement() {
     color: "#f9fafb",
   };
 
-  // mock load
-  React.useEffect(() => {
-    // load case from API plus supplemental data
-    async function fetchCase() {
+  // Load cases list
+  useEffect(() => {
+    async function fetchCases() {
       try {
-        const data = await amlAPI.getCase("CASE-1234");
-        setCaseData(data);
-        const disc = await amlAPI.getCaseDiscussion(data.id);
-        setDiscussion(disc.entries.map((e) => `${e.user}: ${e.message}`));
-        const aud = await amlAPI.getCaseAudit(data.id);
-        setAudit(aud.timeline.map((t) => `${t.timestamp} ${t.user} ${t.event}`));
+        const resp = await fetch("/api/cases?pageSize=50");
+        const data = await resp.json();
+        setCases(data.cases || []);
+        // Auto-load the first case
+        if (data.cases?.length > 0) {
+          loadCase(data.cases[0].id);
+        }
       } catch (err) {
         console.error(err);
+      } finally {
+        setLoadingList(false);
       }
     }
-    fetchCase();
+    fetchCases();
   }, []);
+
+  async function loadCase(id: string) {
+    try {
+      const data = await amlAPI.getCase(id);
+      setCaseData(data);
+      const disc = await amlAPI.getCaseDiscussion(data.id);
+      setDiscussion(disc.entries.map((e) => `${e.user}: ${e.message}`));
+      const aud = await amlAPI.getCaseAudit(data.id);
+      setAudit(aud.timeline.map((t) => `${t.timestamp} ${t.user} ${t.event}`));
+    } catch (err) {
+      console.error(err);
+    }
+  }
 
   const updateStatus = async (status: CaseRecord["status"]) => {
     if (!caseData) return;
@@ -55,6 +75,23 @@ export default function CaseManagement() {
   return (
     <div style={{ padding: 20, color: "#e5e7eb" }}>
       <h1>Case Management</h1>
+
+      {/* Case selector */}
+      <div style={{ marginTop: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+        <label style={{ fontSize: 14 }}>Select Case:</label>
+        <select
+          value={caseData?.id ?? ""}
+          onChange={(e) => e.target.value && loadCase(e.target.value)}
+          style={{ background: "#0f172a", color: "#e5e7eb", border: "1px solid #334155", borderRadius: 4, padding: "6px 10px", minWidth: 260 }}
+        >
+          {cases.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.caseNumber ?? c.id} — {c.customer} ({c.status})
+            </option>
+          ))}
+        </select>
+        <span style={{ fontSize: 13, color: "#64748b" }}>{cases.length} cases total</span>
+      </div>
 
       {/* case summary panel */}
       {caseData && (
@@ -248,7 +285,7 @@ export default function CaseManagement() {
         </div>
       )}
 
-      {!caseData && <div>Loading case...</div>}
+      {!caseData && <div>{loadingList ? "Loading cases..." : "No cases found."}</div>}
     </div>
   );
 }

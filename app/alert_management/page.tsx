@@ -49,10 +49,10 @@ export default function AlertManagement() {
                 });
                 const mapped: ManagedAlert[] = resp.alerts.map((a): ManagedAlert => ({
                     ...a,
-                    customerName: a.institution || "--",
-                    riskScore: a.severity === 'critical' ? 90 : a.severity === 'high' ? 70 : a.severity === 'medium' ? 50 : 20,
-                    amount: Math.floor(Math.random() * 10000),
-                    ruleTriggered: "N/A",
+                    customerName: (a as any).customerName || a.institution || "--",
+                    riskScore: (a as any).riskScore ?? (a.severity === 'critical' ? 90 : a.severity === 'high' ? 70 : a.severity === 'medium' ? 50 : 20),
+                    amount: (a as any).amount ?? 0,
+                    ruleTriggered: (a as any).ruleTriggered || "N/A",
                     detectionSource: a.detectionType as "edge" | "core",
                     lifecycleStage: (a as any).lifecycleStage || 'new',
                     slaRemainingHours: a.slsRemaining,

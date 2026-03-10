@@ -1,14 +1,45 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { handleApiError } from "@/lib/errorHandler";
+import { createCaseAudit } from "@/lib/auditLog";
 
-const timeline: Array<{ event: string; user: string; timestamp: string; ip?: string }> = [];
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const entries = await prisma.caseAuditEntry.findMany({
+      where: { caseId: id },
+      orderBy: { timestamp: "desc" },
+    });
 
-export async function GET() {
-  return NextResponse.json({ timeline });
+    return NextResponse.json({
+      timeline: entries.map((e) => ({
+        event: e.event,
+        user: e.user,
+        timestamp: e.timestamp.toISOString(),
+        ip: e.ip ?? undefined,
+      })),
+    });
+  } catch (error) {
+    return handleApiError(error);
+  }
 }
 
-export async function POST(request: Request) {
-  const body = await request.json();
-  const { event, user, ip } = body || {};
-  timeline.push({ event, user, timestamp: new Date().toISOString(), ip });
-  return NextResponse.json({ success: true });
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    const { event, user, ip } = body || {};
+
+    await createCaseAudit({ caseId: id, event, user, ip });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return handleApiError(error);
+  }
 }

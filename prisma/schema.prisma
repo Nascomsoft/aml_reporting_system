@@ -1,0 +1,348 @@
+// AML Reporting System — Prisma Schema for MongoDB
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Authentication & Users ──────────────────────────────────────────────────
+
+model User {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  email          String    @unique
+  name           String
+  password       String // bcrypt hash
+  role           UserRole  @default(COMPLIANCE_OFFICER)
+  institutionId  String?   @db.ObjectId
+  institution    Institution? @relation(fields: [institutionId], references: [id])
+  isActive       Boolean   @default(true)
+  lastLogin      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // relations
+  assignedCases      Case[]           @relation("InvestigatorCases")
+  strSubmissions     STRSubmission[]
+  activityLogs       ActivityLog[]
+  notifications      Notification[]
+  createdRules       AMLRule[]        @relation("RuleCreator")
+  reportExports      ReportExport[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  COMPLIANCE_OFFICER
+  REGULATOR
+}
+
+// ─── Institutions ────────────────────────────────────────────────────────────
+
+model Institution {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  name            String   @unique
+  code            String   @unique
+  region          String
+  riskScore       Float    @default(0)
+  branchCount     Int      @default(1)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // relations
+  users           User[]
+  alerts          Alert[]
+  transactions    Transaction[]
+
+  @@map("institutions")
+}
+
+// ─── Alerts ──────────────────────────────────────────────────────────────────
+
+model Alert {
+  id              String         @id @default(auto()) @map("_id") @db.ObjectId
+  title           String
+  description     String?
+  severity        AlertSeverity
+  detectionType   DetectionType
+  lifecycleStage  LifecycleStage @default(NEW)
+  riskScore       Float
+  amount          Float
+  customerName    String
+  accountNumber   String?
+  ruleTriggered   String
+  institutionId   String         @db.ObjectId
+  institution     Institution    @relation(fields: [institutionId], references: [id])
+  slsRemaining    Float          @default(48) // hours
+  flagReason      String?
+  country         String?
+  metadata        Json?
+  timestamp       DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  // relations
+  caseId          String?        @db.ObjectId
+  case            Case?          @relation(fields: [caseId], references: [id])
+  transactions    Transaction[]  @relation("AlertTransactions", fields: [transactionIds], references: [id])
+  transactionIds  String[]       @db.ObjectId
+
+  @@index([severity])
+  @@index([lifecycleStage])
+  @@index([institutionId])
+  @@index([timestamp])
+  @@map("alerts")
+}
+
+enum AlertSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum DetectionType {
+  EDGE
+  CORE
+}
+
+enum LifecycleStage {
+  NEW
+  UNDER_REVIEW
+  ESCALATED
+  STR_SUBMITTED
+  CLOSED
+}
+
+// ─── Cases ───────────────────────────────────────────────────────────────────
+
+model Case {
+  id                  String        @id @default(auto()) @map("_id") @db.ObjectId
+  caseNumber          String        @unique
+  customer            String
+  riskLevel           AlertSeverity
+  status              LifecycleStage @default(NEW)
+  escalationLevel     Int            @default(0)
+  complianceDeadline  DateTime
+  slaRemainingHours   Float          @default(48)
+  overdue             Boolean        @default(false)
+  summary             String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  // investigator
+  investigatorId      String?        @db.ObjectId
+  investigator        User?          @relation("InvestigatorCases", fields: [investigatorId], references: [id])
+
+  // relations
+  linkedAlerts        Alert[]
+  discussions         CaseDiscussion[]
+  auditEntries        CaseAuditEntry[]
+  strSubmissions      STRSubmission[]
+
+  @@index([status])
+  @@index([riskLevel])
+  @@map("cases")
+}
+
+model CaseDiscussion {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  caseId    String   @db.ObjectId
+  case      Case     @relation(fields: [caseId], references: [id])
+  user      String
+  message   String
+  timestamp DateTime @default(now())
+
+  @@index([caseId])
+  @@map("case_discussions")
+}
+
+model CaseAuditEntry {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  caseId    String   @db.ObjectId
+  case      Case     @relation(fields: [caseId], references: [id])
+  event     String
+  user      String
+  details   String?
+  ip        String?
+  timestamp DateTime @default(now())
+
+  @@index([caseId])
+  @@map("case_audit_entries")
+}
+
+// ─── AML Rules ───────────────────────────────────────────────────────────────
+
+model AMLRule {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  name        String    @unique
+  description String
+  ruleType    RuleType
+  threshold   Float?
+  severity    AlertSeverity
+  riskWeight  Float     @default(1.0)
+  condition   String?   // JSON logic expression
+  isActive    Boolean   @default(true)
+  createdById String    @db.ObjectId
+  createdBy   User      @relation("RuleCreator", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("aml_rules")
+}
+
+enum RuleType {
+  THRESHOLD
+  PATTERN
+  VELOCITY
+}
+
+// ─── STR Submissions ─────────────────────────────────────────────────────────
+
+model STRSubmission {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  transactionSummary    String
+  customerName          String
+  accountNumber         String
+  descriptionOfSuspicion String
+  rulesTriggered        String[]
+  transactionIds        String[]
+  behavioralDeviations  String[]
+  narrative             String
+  riskClassification    AlertSeverity
+  supportingDocuments   String[] // file paths or URLs
+  status                STRStatus @default(DRAFT)
+
+  // relations
+  caseId                String?   @db.ObjectId
+  case                  Case?     @relation(fields: [caseId], references: [id])
+  submittedById         String    @db.ObjectId
+  submittedBy           User      @relation(fields: [submittedById], references: [id])
+
+  submittedDate         DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([status])
+  @@map("str_submissions")
+}
+
+enum STRStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  CLOSED
+}
+
+// ─── Transactions ────────────────────────────────────────────────────────────
+
+model Transaction {
+  id              String            @id @default(auto()) @map("_id") @db.ObjectId
+  transactionRef  String            @unique
+  accountNumber   String
+  customerName    String
+  amount          Float
+  currency        String            @default("USD")
+  transactionType TransactionType
+  country         String?
+  riskScore       Float             @default(0)
+  status          TransactionStatus @default(NORMAL)
+  flagReason      String?
+  date            DateTime          @default(now())
+  institutionId   String            @db.ObjectId
+  institution     Institution       @relation(fields: [institutionId], references: [id])
+  metadata        Json?
+  createdAt       DateTime          @default(now())
+
+  // relations
+  alerts          Alert[]           @relation("AlertTransactions", fields: [alertIds], references: [id])
+  alertIds        String[]          @db.ObjectId
+
+  @@index([accountNumber])
+  @@index([date])
+  @@index([riskScore])
+  @@index([status])
+  @@index([institutionId])
+  @@map("transactions")
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER
+  WIRE
+  CASH
+  CHECK
+}
+
+enum TransactionStatus {
+  NORMAL
+  FLAGGED
+  UNDER_REVIEW
+  CLEARED
+}
+
+// ─── Activity / Audit Log ────────────────────────────────────────────────────
+
+model ActivityLog {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id])
+  action      String   // LOGIN, LOGOUT, ALERT_UPDATE, CASE_CREATE, STR_SUBMIT, RULE_CHANGE, EXPORT
+  resource    String?  // alert, case, rule, str, etc.
+  resourceId  String?
+  changes     Json?
+  ip          String?
+  timestamp   DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("activity_logs")
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+model Notification {
+  id        String          @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String          @db.ObjectId
+  user      User            @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  severity  AlertSeverity
+  isRead    Boolean         @default(false)
+  link      String?
+  createdAt DateTime        @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+// ─── Report Exports ──────────────────────────────────────────────────────────
+
+model ReportExport {
+  id          String       @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String       @db.ObjectId
+  user        User         @relation(fields: [userId], references: [id])
+  format      ExportFormat
+  filters     Json?
+  fileName    String
+  fileUrl     String?
+  generatedAt DateTime     @default(now())
+  expiresAt   DateTime
+
+  @@index([userId])
+  @@map("report_exports")
+}
+
+enum ExportFormat {
+  PDF
+  CSV
+  XLSX
+}

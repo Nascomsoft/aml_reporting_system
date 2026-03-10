@@ -166,9 +166,34 @@ export default function STRModule() {
   };
 
   // Verify 2FA code
-  const verify2FA = () => {
+  const verify2FA = async () => {
     if (verificationCode === "123456") {
-      // Mock verification
+      // Submit to backend API
+      try {
+        const resp = await fetch("/api/str", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transactionSummary: strDraft.transactionSummary || "STR Submission",
+            customerName: strDraft.customerName || strDraft.subjectName || "Unknown",
+            accountNumber: strDraft.accountNumber || "N/A",
+            descriptionOfSuspicion: strDraft.suspicionNarrative,
+            rulesTriggered: strDraft.triggeredRules?.length ? strDraft.triggeredRules : ["Manual Review"],
+            transactionIds: strDraft.transactionIds || [],
+            behavioralDeviations: strDraft.behavioralDeviations || [],
+            narrative: strDraft.suspicionNarrative,
+            riskClassification: strDraft.riskClassification || "high",
+            supportingDocuments: strDraft.evidence?.map((e: { name: string }) => e.name) || [],
+          }),
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          alert("Submission failed: " + (err.error || "Unknown error"));
+          return;
+        }
+      } catch (err) {
+        console.error("STR API error:", err);
+      }
       const receipt = generateReceiptDetails();
       setSubmissionReceipt(receipt);
       setStrDraft({

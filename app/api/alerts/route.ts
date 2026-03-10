@@ -1,53 +1,99 @@
-import { NextResponse } from 'next/server';
-
-// this route supports both listing with filters and patching individual alerts
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { alertFiltersSchema, alertUpdateSchema } from "@/lib/validation";
+import { handleApiError } from "@/lib/errorHandler";
+import {
+  toSeverity,
+  toDetectionType,
+  toLifecycle,
+  fromSeverity,
+  fromDetectionType,
+  fromLifecycle,
+} from "@/lib/enumMaps";
+import type { Prisma } from "@prisma/client";
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const page = parseInt(url.searchParams.get('page') || '1', 10);
-  const pageSize = parseInt(url.searchParams.get('pageSize') || '20', 10);
+  try {
+    const url = new URL(request.url);
+    const raw = Object.fromEntries(url.searchParams);
+    const filters = alertFiltersSchema.parse(raw);
 
-  // read filters
-  const severity = url.searchParams.get('severity');
-  const detectionType = url.searchParams.get('detectionType');
-  const lifecycleStage = url.searchParams.get('lifecycleStage');
-  const institution = url.searchParams.get('institution');
-  // const dateFrom = url.searchParams.get('dateFrom');
-  // const dateTo = url.searchParams.get('dateTo');
-  // const amountMin = url.searchParams.get('amountMin');
-  // const amountMax = url.searchParams.get('amountMax');
+    const where: Prisma.AlertWhereInput = {};
 
-  // In a real implementation, these params would be applied to a database query.
-  // For now we return dummy alerts that echo the filters for visibility.
+    if (filters.severity) where.severity = toSeverity(filters.severity);
+    if (filters.detectionType) where.detectionType = toDetectionType(filters.detectionType);
+    if (filters.lifecycleStage) where.lifecycleStage = toLifecycle(filters.lifecycleStage);
+    if (filters.institution) {
+      where.institution = { name: { contains: filters.institution, mode: "insensitive" } };
+    }
+    if (filters.dateFrom || filters.dateTo) {
+      where.timestamp = {};
+      if (filters.dateFrom) where.timestamp.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.timestamp.lte = new Date(filters.dateTo);
+    }
+    if (filters.amountMin !== undefined || filters.amountMax !== undefined) {
+      where.amount = {};
+      if (filters.amountMin !== undefined) where.amount.gte = filters.amountMin;
+      if (filters.amountMax !== undefined) where.amount.lte = filters.amountMax;
+    }
 
-  const alerts = Array.from({ length: pageSize }, (_, i) => ({
-    id: `alert-${(page-1)*pageSize + i + 1}`,
-    title: `Alert ${(page-1)*pageSize + i + 1}`,
-    severity: severity || (i % 3 === 0 ? 'critical' : 'high'),
-    slsRemaining: Math.floor(Math.random() * 48),
-    institution: institution || `Bank ${i + 1}`,
-    detectionType: detectionType || (i % 2 === 0 ? 'edge' : 'core'),
-    timestamp: new Date(Date.now() - i * 3600000).toISOString(),
-    lifecycleStage: lifecycleStage || 'new',
-    riskScore: Math.floor(Math.random() * 100),
-    amount: Math.floor(Math.random() * 10000),
-    customerName: `Customer ${i + 1}`,
-    ruleTriggered: `Rule ${i % 5}`,
-  }));
+    const [alerts, total] = await Promise.all([
+      prisma.alert.findMany({
+        where,
+        include: { institution: { select: { name: true } } },
+        orderBy:
+          filters.sortBy === "timestamp"
+            ? { timestamp: "desc" }
+            : { slsRemaining: "asc" },
+        skip: (filters.page - 1) * filters.pageSize,
+        take: filters.pageSize,
+      }),
+      prisma.alert.count({ where }),
+    ]);
 
-  return NextResponse.json({ alerts, total: 500, page, pageSize });
+    return NextResponse.json({
+      alerts: alerts.map((a) => ({
+        id: a.id,
+        title: a.title,
+        severity: fromSeverity(a.severity),
+        slsRemaining: a.slsRemaining,
+        institution: a.institution?.name ?? "",
+        detectionType: fromDetectionType(a.detectionType),
+        timestamp: a.timestamp.toISOString(),
+        lifecycleStage: fromLifecycle(a.lifecycleStage),
+        riskScore: a.riskScore,
+        amount: a.amount,
+        customerName: a.customerName,
+        ruleTriggered: a.ruleTriggered,
+      })),
+      total,
+      page: filters.page,
+      pageSize: filters.pageSize,
+    });
+  } catch (error) {
+    return handleApiError(error);
+  }
 }
 
 export async function PATCH(request: Request) {
-  const url = new URL(request.url);
-  const segments = url.pathname.split('/');
-  const id = segments[segments.length - 1];
+  try {
+    const body = await request.json();
+    const { id, ...rest } = body;
+    if (!id) {
+      return NextResponse.json({ error: "Alert id is required" }, { status: 400 });
+    }
+    const data = alertUpdateSchema.parse(rest);
 
-  const body = await request.json();
-  const { lifecycleStage } = body || {};
+    const alert = await prisma.alert.update({
+      where: { id },
+      data: { lifecycleStage: toLifecycle(data.lifecycleStage) },
+    });
 
-  // pretend to update the alert in database and audit log
-  console.log(`Updating alert ${id} to stage ${lifecycleStage}`);
-
-  return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      alert: { id: alert.id, lifecycleStage: fromLifecycle(alert.lifecycleStage) },
+    });
+  } catch (error) {
+    return handleApiError(error);
+  }
 }
