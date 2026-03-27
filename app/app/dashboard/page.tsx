@@ -1,293 +1,412 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-// correct relative path to shared API service and export types
 import {
-    amlAPI,
-    useAsync,
-    AlertResponse,
-    KPIResponse,
-    AlertsListResponse,
-    RealTimeIndicatorsResponse,
-    HeatmapDataResponse,
-    TrendDataResponse,
-    AlertLifecycleResponse,
-    InstitutionRiskResponse,
+  amlAPI,
+  useAsync,
+  AlertResponse,
+  KPIResponse,
+  AlertsListResponse,
+  RealTimeIndicatorsResponse,
+  HeatmapDataResponse,
+  TrendDataResponse,
+  AlertLifecycleResponse,
+  BankDashboardResponse,
 } from "../../../AML_frontend/services/api";
 
-type Role = "bank" | "regulator" | "admin";
-
 function severityColor(s: string) {
-	switch (s) {
-		case "critical":
-			return "#b91c1c"; // red
-		case "high":
-			return "#ea580c"; // orange
-		case "medium":
-			return "#f59e0b"; // amber
-		default:
-			return "#10b981"; // green
-	}
+  switch (s) {
+    case "critical":
+      return "#b91c1c";
+    case "high":
+      return "#ea580c";
+    case "medium":
+      return "#f59e0b";
+    default:
+      return "#10b981";
+  }
 }
 
-export default function Dashboard() {
-	const [role, setRole] = useState<Role>("bank");
-    const [lastUpdate, setLastUpdate] = useState<string>("");
-	// add explicit generics so returned data is correctly typed
-	const kpi = useAsync<KPIResponse>(() => amlAPI.getKPISummary());
-	const topAlerts = useAsync<AlertsListResponse>(() => amlAPI.getTopAlerts(5));
-	const realtime = useAsync<RealTimeIndicatorsResponse>(() => amlAPI.getRealTimeIndicators());
-	const heatmap = useAsync<HeatmapDataResponse>(() => amlAPI.getHeatmapData());
-	const trend = useAsync<TrendDataResponse>(() => amlAPI.getTrendData("24h"));
-	const lifecycle = useAsync<AlertLifecycleResponse>(() => amlAPI.getAlertLifecycle());
-	const institutionRisk = useAsync<InstitutionRiskResponse>(() => amlAPI.getInstitutionRisk());
+function riskColor(score: number): string {
+  if (score >= 75) return "#ef4444";
+  if (score >= 50) return "#f59e0b";
+  return "#10b981";
+}
 
-	// Poll realtime indicators every 10s
-	useEffect(() => {
-		const iv = setInterval(() => {
-			realtime.refetch();
-		}, 10000);
-		return () => clearInterval(iv);
-	}, []);
+export default function OfficerDashboard() {
+  const [lastUpdate, setLastUpdate] = useState<string>("");
+  const [selectedTimeRange, setSelectedTimeRange] = useState<"24h" | "7d" | "30d">("24h");
 
-	// set initial backend update time once on client
-	useEffect(() => {
-		setLastUpdate(new Date().toLocaleTimeString());
-	}, []);
+  // Data fetching with proper role-based Auth
+  const bankDashboard = useAsync<BankDashboardResponse>(() => amlAPI.getBankDashboard());
+  const topAlerts = useAsync<AlertsListResponse>(() => amlAPI.getTopAlerts(5));
+  const realtime = useAsync<RealTimeIndicatorsResponse>(() => amlAPI.getRealTimeIndicators());
+  const heatmap = useAsync<HeatmapDataResponse>(() => amlAPI.getHeatmapData());
+  const trend = useAsync<TrendDataResponse>(() => amlAPI.getTrendData(selectedTimeRange));
+  const lifecycle = useAsync<AlertLifecycleResponse>(() => amlAPI.getAlertLifecycle());
 
-	// Small helper renderers
-	const renderKPI = () => {
-		if (kpi.loading) return <div>Loading KPIs...</div>;
-		if (kpi.error) return <div className="text-red-600">{kpi.error}</div>;
-		if (!kpi.data) return <div>No KPI data</div>;
+  // Refresh realtime indicators every 30 seconds
+  useEffect(() => {
+    const iv = setInterval(() => {
+      realtime.refetch();
+    }, 30000);
+    return () => clearInterval(iv);
+  }, []);
 
-		const d = kpi.data;
+  // Set initial client time
+  useEffect(() => {
+    setLastUpdate(new Date().toLocaleTimeString());
+  }, []);
 
-		return (
-			<div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 12 }}>
-				<div style={{ padding: 12, background: "#111827", color: "white", borderRadius: 6 }}>
-					<div style={{ fontSize: 12, opacity: 0.8 }}>Total Transactions Today</div>
-					<div style={{ fontSize: 20, fontWeight: 700 }}>{d.totalTransactions.toLocaleString()}</div>
-				</div>
+  // Render KPI metrics (officer-specific: branches, cases, escalation)
+  const renderKPIMetrics = () => {
+    if (bankDashboard.loading) return <div style={{ color: "#94a3b8" }}>Loading metrics...</div>;
+    if (bankDashboard.error) return <div style={{ color: "#ef4444" }}>Error: {bankDashboard.error}</div>;
+    if (!bankDashboard.data) return null;
 
-				<div style={{ padding: 12, background: "#111827", color: "white", borderRadius: 6 }}>
-					<div style={{ fontSize: 12, opacity: 0.8 }}>Total Alerts</div>
-					<div style={{ fontSize: 20, fontWeight: 700 }}>{d.totalAlerts}</div>
-					<div style={{ marginTop: 6, fontSize: 12 }}>
-						<span style={{ color: "#60a5fa" }}>New {d.alertSegmentation.new}</span>
-						<span style={{ marginLeft: 8, color: "#f59e0b" }}>Under Review {d.alertSegmentation.underReview}</span>
-						<span style={{ marginLeft: 8, color: "#ef4444" }}>Escalated {d.alertSegmentation.escalated}</span>
-					</div>
-				</div>
+    const data = bankDashboard.data;
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+        <div style={{ padding: 12, background: "#0b1220", borderRadius: 6, border: "1px solid #1e293b" }}>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>Branches Monitored</div>
+          <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>{data.branchesMonitored}</div>
+          <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>Across your institution</div>
+        </div>
 
-				<div style={{ padding: 12, background: "#111827", color: "white", borderRadius: 6 }}>
-					<div style={{ fontSize: 12, opacity: 0.8 }}>Overdue Cases</div>
-					<div style={{ fontSize: 20, fontWeight: 700, color: d.overdueCases ? "#ef4444" : "#10b981" }}>{d.overdueCases}</div>
-					<div style={{ fontSize: 12, marginTop: 6, color:"white" }}>SLA: {d.slaCountdown }</div>
-				</div>
-				<div style={{ padding: 12, background: "#111827", color: "white", borderRadius: 6 }}>
-					<div style={{ fontSize: 12, opacity: 0.8 }}>STR Submitted Today</div>
-					<div style={{ fontSize: 20, fontWeight: 700 }}>{d.strSubmittedToday}</div>
-				</div>
+        <div style={{ padding: 12, background: "#0b1220", borderRadius: 6, border: "1px solid #1e293b" }}>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>Branches Requiring Attention</div>
+          <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, color: data.branchesRequiringAttention > 0 ? "#f59e0b" : "#10b981" }}>
+            {data.branchesRequiringAttention}
+          </div>
+          <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>Risk score ≥ 70</div>
+        </div>
 
-				<div style={{ padding: 12, background: "#111827", color: "white", borderRadius: 6 }}>
-					<div style={{ fontSize: 12, opacity: 0.8 }}>Edge vs Core Detection</div>
-					<div style={{ fontSize: 20, fontWeight: 700 }}>{d.edgeDetection}:{d.coreDetection}</div>
-				</div>
+        <div style={{ padding: 12, background: "#0b1220", borderRadius: 6, border: "1px solid #1e293b" }}>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>Cases Under Review</div>
+          <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>{data.casesUnderReview}</div>
+          <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>Active investigations</div>
+        </div>
 
-				<div style={{ padding: 12, background: "#111827", color: "white", borderRadius: 6 }}>
-					<div style={{ fontSize: 12, opacity: 0.8 }}>Pending Regulatory Reviews</div>
-					<div style={{ fontSize: 20, fontWeight: 700 }}>{d.pendingRegulatoryReviews}</div>
-				</div>
-			</div>
-		);
-	};
+        <div style={{ padding: 12, background: "#0b1220", borderRadius: 6, border: "1px solid #1e293b" }}>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>Cases Pending Escalation</div>
+          <div style={{
+            fontSize: 20,
+            fontWeight: 700,
+            marginTop: 4,
+            color: data.casesPendingEscalation > 0 ? "#ef4444" : "#10b981"
+          }}>
+            {data.casesPendingEscalation}
+          </div>
+          <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>SLA ≤ 8 hours</div>
+        </div>
+      </div>
+    );
+  };
 
-	const renderTopAlerts = () => {
-		if (topAlerts.loading) return <div>Loading alerts...</div>;
-		if (topAlerts.error) return <div className="text-red-600">{topAlerts.error}</div>;
-		if (!topAlerts.data || !topAlerts.data.alerts.length) return <div>No high-risk alerts</div>;
+  // Render top alerts with severity colors
+  const renderTopAlerts = () => {
+    if (topAlerts.loading) return <div style={{ color: "#94a3b8" }}>Loading alerts...</div>;
+    if (topAlerts.error) return <div style={{ color: "#ef4444" }}>Error: {topAlerts.error}</div>;
+    if (!topAlerts.data || !topAlerts.data.alerts.length) return <div style={{ color: "#94a3b8" }}>No high-risk alerts</div>;
 
-		return (
-			<div>
-				{topAlerts.data.alerts.map((a: AlertResponse) => (
-					<div key={a.id} style={{ display: "flex", justifyContent: "space-between", padding: 8, borderBottom: "1px solid #111827" }}>
-						<div>
-							<div style={{ fontWeight: 700 }}>{a.title}</div>
-							<div style={{ fontSize: 12, opacity: 0.8 }}>{a.institution} • {new Date(a.timestamp).toUTCString()}</div>
-						</div>
-						<div style={{ textAlign: "right" }}>
-							<div style={{ color: severityColor(a.severity), fontWeight: 700 }}>{a.severity.toUpperCase()}</div>
-							<div style={{ fontSize: 12 }}>{a.slsRemaining}h SLA</div>
-						</div>
-					</div>
-				))}
-			</div>
-		);
-	};
+    return (
+      <div>
+        {topAlerts.data.alerts.slice(0, 5).map((a: AlertResponse) => (
+          <div
+            key={a.id}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              padding: 8,
+              borderBottom: "1px solid #1e293b",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{a.title}</div>
+              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>
+                {a.institution || "Unknown"} • {new Date(a.timestamp).toLocaleDateString()}
+              </div>
+            </div>
+            <div style={{ textAlign: "right", marginLeft: 12 }}>
+              <div style={{ color: severityColor(a.severity), fontWeight: 700, fontSize: 12 }}>
+                {a.severity.toUpperCase()}
+              </div>
+              <div style={{ fontSize: 11, opacity: 0.7, marginTop: 2 }}>{a.slsRemaining}h SLA</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
-	const renderRealtimeIndicators = () => {
-		if (realtime.loading) return <div>Loading indicators...</div>;
-		if (realtime.error) return <div className="text-red-600">{realtime.error}</div>;
-		if (!realtime.data) return <div>No indicators</div>;
+  // Render real-time indicators
+  const renderRealtimeIndicators = () => {
+    if (realtime.loading) return <div style={{ color: "#94a3b8" }}>Loading...</div>;
+    if (realtime.error) return <div style={{ color: "#ef4444" }}>Error</div>;
+    if (!realtime.data) return null;
 
-		const r = realtime.data;
-		return (
-			<div style={{ display: "flex", gap: 12 }}>
-				<div style={{ padding: 8, background: "#0f172a", color: "white", borderRadius: 6 }}>
-					<div style={{ fontSize: 12, opacity: 0.8 }}>Live Notifications</div>
-					<div style={{ fontWeight: 700, fontSize: 18 }}>{r.liveNotifications}</div>
-				</div>
-				<div style={{ padding: 8, background: "#0f172a", color: "white", borderRadius: 6 }}>
-					<div style={{ fontSize: 12, opacity: 0.8 }}>Edge Detections</div>
-					<div style={{ fontWeight: 700, fontSize: 18 }}>{r.edgeDetectionCount}</div>
-				</div>
-				<div style={{ padding: 8, background: "#0f172a", color: "white", borderRadius: 6 }}>
-					<div style={{ fontSize: 12, opacity: 0.8 }}>Backend Detections</div>
-					<div style={{ fontWeight: 700, fontSize: 18 }}>{r.coreDetectionCount}</div>
-				</div>
-			</div>
-		);
-	};
+    const r = realtime.data;
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+        <div style={{ padding: 8, background: "#0f172a", borderRadius: 6 }}>
+          <div style={{ fontSize: 11, opacity: 0.7 }}>Active Alerts</div>
+          <div style={{ fontWeight: 700, fontSize: 18, marginTop: 4 }}>{r.liveNotifications}</div>
+        </div>
+        <div style={{ padding: 8, background: "#0f172a", borderRadius: 6 }}>
+          <div style={{ fontSize: 11, opacity: 0.7 }}>Rule-Based</div>
+          <div style={{ fontWeight: 700, fontSize: 18, marginTop: 4 }}>{r.edgeDetectionCount}</div>
+        </div>
+        <div style={{ padding: 8, background: "#0f172a", borderRadius: 6 }}>
+          <div style={{ fontSize: 11, opacity: 0.7 }}>System-Based</div>
+          <div style={{ fontWeight: 700, fontSize: 18, marginTop: 4 }}>{r.coreDetectionCount}</div>
+        </div>
+      </div>
+    );
+  };
 
-	return (
-		<div style={{ padding: 20, color: "#e5e7eb", fontFamily: "Inter, sans-serif" }}>
-			<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-				<div>
-					<h1 style={{ margin: 0, fontSize: 22 }}>AML Dashboard</h1>
-					<div style={{ fontSize: 12, opacity: 0.7 }}>Enforcement-focused view — prioritizes compliance and risk visibility</div>
-				</div>
+  // Render alert lifecycle breakdown
+  const renderAlertLifecycle = () => {
+    if (lifecycle.loading) return <div style={{ color: "#94a3b8" }}>Loading...</div>;
+    if (lifecycle.error) return <div style={{ color: "#ef4444" }}>Error</div>;
+    if (!lifecycle.data) return null;
 
-				<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-					<div style={{ background: "#ef4444", color: "white", padding: "6px 10px", borderRadius: 20 }}>Live</div>
-					<select value={role} onChange={(e) => setRole(e.target.value as Role)} style={{ padding: 8, borderRadius: 6, background: "#0b1220", color: "white" }}>
-						<option value="bank">Bank</option>
-						<option value="regulator">Regulator</option>
-						<option value="admin">Admin</option>
-					</select>
-				</div>
-			</div>
+    const stages = [
+      { key: "new", label: "New", color: "#60a5fa" },
+      { key: "underReview", label: "Under Review", color: "#f59e0b" },
+      { key: "escalated", label: "Escalated", color: "#ef4444" },
+      { key: "strSubmitted", label: "STR Submitted", color: "#8b5cf6" },
+      { key: "closed", label: "Closed", color: "#10b981" },
+    ];
 
-			<section style={{ marginBottom: 20 }}>{renderKPI()}</section>
+    const maxValue = Math.max(...Object.values(lifecycle.data as Record<string, number>));
 
-			<section style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
-				<div style={{ padding: 12, background: "#0b1220", borderRadius: 6 }}>
-					<div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-						<strong>Visual Analytics</strong>
-						<div style={{ fontSize: 12, opacity: 0.7 }}>National Risk Heatmap • Trend • Lifecycle</div>
-					</div>
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
+        {stages.map(({ key, label, color }) => {
+          const value = (lifecycle.data as Record<string, number>)[key] ?? 0;
+          const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
+          return (
+            <div key={key}>
+              <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 6 }}>{label}</div>
+              <div
+                style={{
+                  height: 120,
+                  background: "#0f172a",
+                  borderRadius: 6,
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "flex-end",
+                  padding: 8,
+                  position: "relative",
+                }}
+              >
+                <div
+                  style={{
+                    height: `${percentage}%`,
+                    background: color,
+                    borderRadius: 4,
+                    minHeight: percentage > 0 ? 4 : 0,
+                  }}
+                />
+                <div style={{ fontSize: 12, fontWeight: 700, marginTop: 6 }}>{value}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
-					<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-						<div style={{ minHeight: 160, background: "#071025", borderRadius: 6, padding: 8 }}>
-							<div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>National Risk Heatmap</div>
-							<div style={{ height: 110, background: "linear-gradient(90deg,#060b10,#112131)", borderRadius: 6 }}>
-								{/* placeholder heatmap: map would go here */}
-								<div style={{ padding: 8, color: "#cbd5e1" }}>Heatmap placeholder — fetches regions from API</div>
-							</div>
-						</div>
+  // Render heatmap (regional risk)
+  const renderHeatmap = () => {
+    if (heatmap.loading) return <div style={{ color: "#94a3b8" }}>Loading heatmap...</div>;
+    if (heatmap.error) return <div style={{ color: "#ef4444" }}>Error</div>;
+    if (!heatmap.data || !heatmap.data.data.length) return <div style={{ color: "#94a3b8" }}>No data</div>;
 
-						<div style={{ minHeight: 160, background: "#071025", borderRadius: 6, padding: 8 }}>
-							<div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Suspicious Activity Trend (24h)</div>
-							<div style={{ height: 110 }}>
-								{/* Simple inline sparkline based on trend.data if available */}
-								{trend.data && trend.data.data ? (
-									<svg viewBox="0 0 100 30" preserveAspectRatio="none" style={{ width: "100%", height: 110 }}>
-										{(() => {
-											const pts = trend.data!.data.map((p, i) => {
-												const x = (i / Math.max(1, trend.data!.data.length - 1)) * 100;
-												const max = Math.max(...trend.data!.data.map((d) => d.alerts));
-												const y = 30 - (p.alerts / Math.max(1, max)) * 28;
-												return `${x},${y}`;
-											});
-											return <polyline fill="none" stroke="#60a5fa" strokeWidth={2} points={pts.join(" ")} />;
-										})()}
-									</svg>
-								) : (
-									<div style={{ color: "#94a3b8" }}>Trend chart placeholder</div>
-								)}
-							</div>
-						</div>
+    const maxRisk = Math.max(...heatmap.data.data.map((d) => d.riskScore));
 
-						<div style={{ gridColumn: "1 / span 2", minHeight: 120, background: "#071025", borderRadius: 6, padding: 8 }}>
-							<div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Alert Lifecycle Distribution</div>
-							<div style={{ display: "flex", gap: 8 }}>
-								{lifecycle.data ? (
-									Object.entries(lifecycle.data as AlertLifecycleResponse)
-								.map(([k, v]: [string, number]) => (
-										<div key={k} style={{ flex: 1, padding: 8, background: "#06121a", borderRadius: 6 }}>
-											<div style={{ fontSize: 12, opacity: 0.7 }}>{k}</div>
-											<div style={{ fontWeight: 700, fontSize: 18 }}>{v}</div>
-										</div>
-									))
-								) : (
-									<div style={{ color: "#94a3b8" }}>Lifecycle placeholder</div>
-								)}
-							</div>
-						</div>
-					</div>
-				</div>
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+        {heatmap.data.data.map((region) => {
+          const normalized = (region.riskScore / maxRisk) * 100;
+          return (
+            <div
+              key={region.region}
+              style={{
+                padding: 12,
+                background: "#0f172a",
+                borderRadius: 6,
+                border: `2px solid ${riskColor(region.riskScore)}`,
+              }}
+            >
+              <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>{region.region}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: riskColor(region.riskScore) }}>
+                {region.riskScore}
+              </div>
+              <div
+                style={{
+                  height: 4,
+                  background: "#1e293b",
+                  borderRadius: 2,
+                  marginTop: 6,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${normalized}%`,
+                    background: riskColor(region.riskScore),
+                    transition: "width 0.3s",
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
-				<aside style={{ padding: 12, background: "#071025", borderRadius: 6 }}>
-					<div style={{ fontWeight: 700, marginBottom: 8 }}>Alert Priority Panel</div>
-					<div style={{ marginBottom: 12 }}>
-						<div style={{ fontSize: 12, opacity: 0.7 }}>Top 5 High-Risk Alerts</div>
-						<div style={{ marginTop: 8 }}>{renderTopAlerts()}</div>
-					</div>
+  // Render trends with time range selector
+  const renderTrends = () => {
+    if (trend.loading) return <div style={{ color: "#94a3b8" }}>Loading trends...</div>;
+    if (trend.error) return <div style={{ color: "#ef4444" }}>Error</div>;
+    if (!trend.data || !trend.data.data.length) return <div style={{ color: "#94a3b8" }}>No data</div>;
 
-					<div style={{ marginTop: 12 }}>
-						<div style={{ fontSize: 12, opacity: 0.7 }}>Alerts Approaching SLA</div>
-						{/* <div style={{ marginTop: 8, color: "#f97316" }}>-- placeholder (fetch with /alerts?sortBy=slsRemaining)</div> */}
-					</div>
+    const maxAlerts = Math.max(...trend.data.data.map((d) => d.alerts));
 
-					<div style={{ marginTop: 12 }}>
-						<div style={{ fontSize: 12, opacity: 0.7 }}>Recently Escalated</div>
-						{/* <div style={{ marginTop: 8, color: "#ef4444" }}>-- placeholder</div> */}
-					</div>
-				</aside>
-			</section>
+    return (
+      <div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          {["24h", "7d", "30d"].map((range) => (
+            <button
+              key={range}
+              onClick={() => {
+                setSelectedTimeRange(range as "24h" | "7d" | "30d");
+                trend.refetch();
+              }}
+              style={{
+                padding: "6px 12px",
+                background: selectedTimeRange === range ? "#0284c7" : "#0f172a",
+                color: "white",
+                border: "none",
+                borderRadius: 4,
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              {range}
+            </button>
+          ))}
+        </div>
+        <div style={{ height: 200, position: "relative" }}>
+          <svg viewBox="0 0 100 30" preserveAspectRatio="none" style={{ width: "100%", height: "100%" }}>
+            {/* Grid lines */}
+            {[0, 1, 2, 3, 4].map((i) => (
+              <line
+                key={`grid-${i}`}
+                x1="0"
+                y1={i * 7.5}
+                x2="100"
+                y2={i * 7.5}
+                stroke="#1e293b"
+                strokeWidth="0.3"
+              />
+            ))}
+            {/* Trend line */}
+            {(() => {
+              const pts = trend.data!.data.map((p, i) => {
+                const x = (i / Math.max(1, trend.data!.data.length - 1)) * 100;
+                const y = 30 - (p.alerts / Math.max(1, maxAlerts)) * 28;
+                return `${x},${y}`;
+              });
+              return (
+                <>
+                  <polyline fill="none" stroke="#0284c7" strokeWidth={1.5} points={pts.join(" ")} />
+                  <polyline
+                    fill="url(#gradient)"
+                    points={`0,30 ${pts.join(" ")} 100,30`}
+                    opacity="0.3"
+                  />
+                  <defs>
+                    <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#0284c7" />
+                      <stop offset="100%" stopColor="#0284c7" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                </>
+              );
+            })()}
+          </svg>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8, marginTop: 12 }}>
+          {trend.data.data.map((point, i) => (
+            <div key={i} style={{ fontSize: 10, opacity: 0.6, textAlign: "center" }}>
+              <div style={{ fontWeight: 600 }}>{point.alerts}</div>
+              <div style={{ fontSize: 9 }}>{new Date(point.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
-			<section style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 320px", gap: 12 }}>
-				<div style={{ padding: 12, background: "#071025", borderRadius: 6 }}>
-					<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-						<strong>Institution Risk Ranking</strong>
-						<div style={{ fontSize: 12, opacity: 0.7 }}>For regulator role</div>
-					</div>
+  return (
+    <div style={{ padding: 20, background: "#0b1220", color: "#e5e7eb", fontFamily: "system-ui, sans-serif", minHeight: "100vh" }}>
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ margin: "0 0 8px 0", fontSize: 28, fontWeight: 700 }}>Compliance Officer Dashboard</h1>
+        <div style={{ fontSize: 14, opacity: 0.7 }}>Real-time AML monitoring and alert management</div>
+        <div style={{ fontSize: 12, opacity: 0.5, marginTop: 8 }}>Last updated: {lastUpdate} • <span style={{ color: "#10b981" }}>●</span> Live</div>
+      </div>
 
-					<div style={{ marginTop: 8 }}>
-						{role !== "regulator" ? (
-							<div style={{ color: "#94a3b8" }}>Switch to Regulator view to see ranking</div>
-						) : institutionRisk.loading ? (
-							<div>Loading ranking...</div>
-						) : institutionRisk.error ? (
-							<div style={{ color: "#ef4444" }}>{institutionRisk.error}</div>
-						) : institutionRisk.data ? (
-							<ol style={{ marginTop: 8 }}>
-								{institutionRisk.data.data.map((ins, i) => (
-									<li key={ins.institution} style={{ padding: 6, background: i < 3 ? "#2b1220" : "transparent", marginBottom: 6, borderRadius: 4 }}>
-										<div style={{ display: "flex", justifyContent: "space-between" }}>
-											<div>{i + 1}. {ins.institution}</div>
-											<div style={{ color: ins.riskScore > 75 ? "#ef4444" : ins.riskScore > 50 ? "#f59e0b" : "#10b981" }}>{ins.riskScore}</div>
-										</div>
-									</li>
-								))}
-							</ol>
-						) : (
-							<div style={{ color: "#94a3b8" }}>No ranking data</div>
-						)}
-					</div>
-				</div>
+      {/* KPI Metrics */}
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 14, fontWeight: 600, opacity: 0.8, marginBottom: 12 }}>Key Metrics</h2>
+        {renderKPIMetrics()}
+      </section>
 
-				<div style={{ padding: 12, background: "#071025", borderRadius: 6 }}>
-					<div style={{ fontWeight: 700, marginBottom: 8 }}>Real-time Indicators</div>
-					{renderRealtimeIndicators()}
+      {/* Main Analytics Grid */}
+      <section style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20, marginBottom: 24 }}>
+        {/* Left Column: Charts */}
+        <div style={{ display: "grid", gridTemplateRows: "auto auto auto", gap: 20 }}>
+          {/* Alert Lifecycle */}
+          <div style={{ padding: 16, background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Alert Lifecycle Distribution</h3>
+            {renderAlertLifecycle()}
+          </div>
 
-					<div style={{ marginTop: 12 }}>
-						<div style={{ fontSize: 12, opacity: 0.7 }}>Backend</div>
-						<div style={{ fontSize: 12, opacity: 0.7 }}>Last update: {lastUpdate || "--"}</div>
-					</div>
-				</div>
-			</section>
-		</div>
-	);
+          {/* Regional Risk Heatmap */}
+          <div style={{ padding: 16, background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Regional Risk Heatmap</h3>
+            {renderHeatmap()}
+          </div>
+
+          {/* Trends */}
+          <div style={{ padding: 16, background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Suspicious Activity Trends</h3>
+            {renderTrends()}
+          </div>
+        </div>
+
+        {/* Right Column: Alerts & Indicators */}
+        <div style={{ display: "grid", gridTemplateRows: "auto auto", gap: 20 }}>
+          {/* Top Alerts */}
+          <div style={{ padding: 16, background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Priority Alerts</h3>
+            {renderTopAlerts()}
+          </div>
+
+          {/* Real-time Indicators */}
+          <div style={{ padding: 16, background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Real-time Indicators</h3>
+            {renderRealtimeIndicators()}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
 }
 

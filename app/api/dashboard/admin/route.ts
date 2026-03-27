@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { handleApiError } from "@/lib/errorHandler";
+import { requireRole } from "@/lib/session";
 
 export async function GET() {
   try {
+    await requireRole("admin");
     const [activeUsers, totalTransactions] = await Promise.all([
       prisma.user.count({ where: { isActive: true } }),
       prisma.transaction.count(),

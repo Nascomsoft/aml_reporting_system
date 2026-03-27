@@ -2,15 +2,60 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { amlAPI, CaseRecord } from "../../AML_frontend/services/api";
+import {
+  Card,
+  Badge,
+  Button,
+  FormInput,
+  Select,
+  Table,
+  AlertBanner,
+} from "@/components";
+import {
+  formatNGN,
+  formatDateNG,
+  formatDateTimeNG,
+} from "@/lib/localization";
 
 interface CaseListItem extends CaseRecord {
   caseNumber?: string;
 }
 
+const getRiskColor = (riskLevel: string) => {
+  switch (riskLevel?.toLowerCase()) {
+    case "critical":
+      return "danger";
+    case "high":
+      return "warning";
+    case "medium":
+      return "primary";
+    case "low":
+      return "success";
+    default:
+      return "primary";
+  }
+};
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "new":
+      return "primary";
+    case "underReview":
+      return "warning";
+    case "escalated":
+      return "danger";
+    case "strSubmitted":
+      return "success";
+    case "closed":
+      return "primary";
+    default:
+      return "primary";
+  }
+};
+
 export default function CaseManagement() {
   const [cases, setCases] = useState<CaseListItem[]>([]);
   const [caseData, setCaseData] = useState<CaseRecord | null>(null);
-  const [newStatus, setNewStatus] = useState<CaseRecord["status"]>("new");
   const [discussion, setDiscussion] = useState<string[]>([]);
   const [newMessage, setNewMessage] = useState<string>("");
   const [attachments, setAttachments] = useState<string[]>([]);
@@ -18,16 +63,8 @@ export default function CaseManagement() {
   const [newTag, setNewTag] = useState<string>("");
   const [audit, setAudit] = useState<string[]>([]);
   const [loadingList, setLoadingList] = useState(true);
+  const [loadingCase, setLoadingCase] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const buttonBaseStyle: React.CSSProperties = {
-    cursor: "pointer",
-    border: "1px solid white",
-    borderRadius: 4,
-    background: "transparent",
-    padding: "6px 10px",
-    color: "#f9fafb",
-  };
 
   // Load cases list
   useEffect(() => {
@@ -50,15 +87,24 @@ export default function CaseManagement() {
   }, []);
 
   async function loadCase(id: string) {
+    setLoadingCase(true);
     try {
       const data = await amlAPI.getCase(id);
       setCaseData(data);
       const disc = await amlAPI.getCaseDiscussion(data.id);
-      setDiscussion(disc.entries.map((e) => `${e.user}: ${e.message}`));
+      setDiscussion(
+        disc.entries.map((e) => `${e.user}: ${e.message}`)
+      );
       const aud = await amlAPI.getCaseAudit(data.id);
-      setAudit(aud.timeline.map((t) => `${t.timestamp} ${t.user} ${t.event}`));
+      setAudit(
+        aud.timeline.map(
+          (t) => `${t.timestamp} ${t.user} ${t.event}`
+        )
+      );
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoadingCase(false);
     }
   }
 
@@ -72,220 +118,410 @@ export default function CaseManagement() {
     }
   };
 
-  return (
-    <div style={{ padding: 20, color: "#e5e7eb" }}>
-      <h1>Case Management</h1>
+  const escalateToSTR = async () => {
+    if (!caseData) return;
+    try {
+      await updateStatus("escalated");
+      setCaseData({
+        ...caseData,
+        status: "escalated",
+        escalationLevel: caseData.escalationLevel + 1,
+      });
+      setDiscussion([
+        ...discussion,
+        "System: Case escalated to STR submission module.",
+      ]);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-      {/* Case selector */}
-      <div style={{ marginTop: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
-        <label style={{ fontSize: 14 }}>Select Case:</label>
-        <select
-          value={caseData?.id ?? ""}
-          onChange={(e) => e.target.value && loadCase(e.target.value)}
-          style={{ background: "#0f172a", color: "#e5e7eb", border: "1px solid #334155", borderRadius: 4, padding: "6px 10px", minWidth: 260 }}
-        >
-          {cases.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.caseNumber ?? c.id} — {c.customer} ({c.status})
-            </option>
-          ))}
-        </select>
-        <span style={{ fontSize: 13, color: "#64748b" }}>{cases.length} cases total</span>
+  const getSLAColor = (hours: number) => {
+    if (hours < 4) return "#dc2626";
+    if (hours < 24) return "#ea580c";
+    return "#16a34a";
+  };
+
+  if (loadingList) {
+    return (
+      <div className="p-8">
+        <p className="text-text-secondary">Loading case management...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-8 space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="heading-2 text-primary m-0">Case Management</h1>
+        <p className="text-text-secondary text-base mt-2">
+          Handle investigations, manage escalations, and prepare STR submissions
+        </p>
       </div>
 
-      {/* case summary panel */}
-      {caseData && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 20 }}>
-          <div style={{ background: "#0b1220", padding: 12, borderRadius: 6 }}>
-            <h2>Case Summary</h2>
-            <p><strong>Case ID:</strong> {caseData.id}</p>
-            <p><strong>Linked Alerts:</strong> {caseData.linkedAlerts.join(", ")}</p>
-            <p><strong>Customer:</strong> {caseData.customer}</p>
-            <p><strong>Risk Level:</strong> {caseData.riskLevel}</p>
-            <p><strong>Investigator:</strong> {caseData.investigator}</p>
-            <p><strong>Status:</strong> {caseData.status}</p>
-            <p><strong>Escalation:</strong> Level {caseData.escalationLevel}</p>
-            <p><strong>Deadline:</strong> {caseData.complianceDeadline}</p>
+      {/* Case Selector */}
+      <Card>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex-1">
+            <label className="text-xs font-semibold text-text-secondary block mb-2">
+              Select Case
+            </label>
+            <Select
+              value={caseData?.id ?? ""}
+              onChange={(e) => e.target.value && loadCase(e.target.value)}
+              options={cases.map((c) => ({
+                value: c.id,
+                label: `${c.caseNumber ?? c.id} — ${c.customer} (${c.status})`,
+              }))}
+              fullWidth
+            />
           </div>
+          <div className="text-right hidden sm:block">
+            <p className="text-xs text-text-secondary">Total Cases</p>
+            <p className="heading-4 text-primary">{cases.length}</p>
+          </div>
+        </div>
+      </Card>
 
-          {/* tools & timeline */}
-          <div>
-                  {/* lifecycle enforcement */}
-            <section style={{ background: "#0b1220", padding: 12, borderRadius: 6, marginBottom: 20 }}>
-              <h2>Lifecycle Control</h2>
-              <select value={caseData.status} onChange={(e) => updateStatus(e.target.value as any)} style={{ background: "#0b1220", color: "#f9fafb" }} disabled={caseData.status === "strSubmitted" || caseData.status === "closed"}>
-                <option value="new">New</option>
-                <option value="underReview">Under Review</option>
-                <option value="escalated">Escalated</option>
-                <option value="strSubmitted">STR Submitted</option>
-                <option value="closed">Closed</option>
-              </select>
-              <p style={{ marginTop: 8 }}><em>Reopen requests require supervisor approval</em></p>
-            </section>
-
-            {/* SLA tools */}
-            <section style={{ background: "#0b1220", padding: 12, borderRadius: 6, marginBottom: 20 }}>
-              <h2>SLA</h2>
-              <p>Remaining: {caseData.slaRemainingHours}h {caseData.overdue && <span style={{ color: "#ef4444" }}>(Overdue)</span>}</p>
-              {caseData.slaRemainingHours < 4 && <p style={{ color: "#f97316" }}>Escalation warning!</p>}
-            </section>
-
-            {/* collaboration */}
-            <section style={{ background: "#0b1220", padding: 12, borderRadius: 6, marginBottom: 20 }}>
-              <h2>Discussion</h2>
-              <div style={{ maxHeight: 120, overflowY: "auto", background: "#111827", padding: 8, borderRadius: 4 }}>
-                {discussion.map((msg, idx) => <div key={idx}>{msg}</div>)}
+      {caseData && !loadingCase && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column: Case Details & Actions */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Case Summary */}
+            <Card>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="heading-4 text-primary m-0">Case Summary</h3>
+                  <p className="text-xs text-text-secondary mt-1">
+                    Case {caseData.id}
+                  </p>
+                </div>
+                <Badge variant={getStatusColor(caseData.status)}>
+                  {String(caseData.status)
+                    .replace(/([A-Z])/g, " $1")
+                    .trim()
+                    .toUpperCase()}
+                </Badge>
               </div>
-              <textarea
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                style={{ width: "100%", marginTop: 8 }}
-                placeholder="Add note..."
-              />
-              <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap", cursor:"pointer" }}>
-                <button
-                  style={{ ...buttonBaseStyle, flex: 1, minWidth: 120 }}
-                  onClick={async () => {
-                    if (newMessage.trim() && caseData) {
-                      await amlAPI.postCaseDiscussion(caseData.id, newMessage.trim());
-                      setDiscussion([...discussion, `You: ${newMessage.trim()}`]);
-                      setNewMessage("");
-                    }
-                  }}
-                >
-                  Post
-                </button>
-                <button
+
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
+                <div>
+                  <p className="text-xs text-text-secondary">Customer</p>
+                  <p className="font-semibold text-text-primary">
+                    {caseData.customer}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">Risk Level</p>
+                  <Badge variant={getRiskColor(caseData.riskLevel)}>
+                    {String(caseData.riskLevel).toUpperCase()}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">Investigator</p>
+                  <p className="font-semibold text-text-primary">
+                    {caseData.investigator}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">Escalation Level</p>
+                  <p className="font-semibold text-text-primary">
+                    Level {caseData.escalationLevel}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">
+                    Compliance Deadline
+                  </p>
+                  <p className="font-semibold text-text-primary">
+                    {formatDateNG(new Date(caseData.complianceDeadline))}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-secondary">
+                    Linked Alerts
+                  </p>
+                  <p className="font-semibold text-text-primary">
+                    {caseData.linkedAlerts.length}
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            {/* SLA & Lifecycle Control */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* SLA Card */}
+              <Card>
+                <h4 className="heading-6 text-primary m-0 mb-3">SLA Status</h4>
+                <div
+                  className="text-center p-4 rounded-lg"
                   style={{
-                    ...buttonBaseStyle,
-                    flex: 1,
-                    minWidth: 160,
-                    opacity: (!caseData || caseData.status === "escalated" || caseData.status === "strSubmitted" || caseData.status === "closed") ? 0.5 : 1,
-                  }}
-                  disabled={!caseData || caseData.status === "escalated" || caseData.status === "strSubmitted" || caseData.status === "closed" }
-                  onClick={async () => {
-                    if (!caseData) return;
-                    try {
-                      await updateStatus("escalated");
-                      setCaseData({
-                        ...caseData,
-                        status: "escalated",
-                        escalationLevel: caseData.escalationLevel + 1,
-                      });
-                      setDiscussion([...discussion, "System: Escalated to STR module."]);
-                    } catch (err) {
-                      console.error(err);
-                      alert("Failed to escalate case. See console for details.");
-                    }
+                    backgroundColor: `${getSLAColor(caseData.slaRemainingHours)}20`,
+                    borderLeft: `4px solid ${getSLAColor(caseData.slaRemainingHours)}`,
                   }}
                 >
-                  Escalate to STR
-                </button>
+                  <p className="text-xs text-text-secondary mb-2">
+                    Remaining
+                  </p>
+                  <p
+                    className="heading-4 font-bold"
+                    style={{
+                      color: getSLAColor(caseData.slaRemainingHours),
+                    }}
+                  >
+                    {caseData.slaRemainingHours}h
+                  </p>
+                  {caseData.overdue && (
+                    <p className="text-xs text-danger-600 mt-2">
+                      ⚠️ SLA Overdue
+                    </p>
+                  )}
+                  {caseData.slaRemainingHours < 4 && (
+                    <p className="text-xs text-warning-600 mt-2">
+                      ⏰ Approaching deadline
+                    </p>
+                  )}
+                </div>
+              </Card>
+
+              {/* Lifecycle Control */}
+              <Card>
+                <h4 className="heading-6 text-primary m-0 mb-3">
+                  Case Lifecycle
+                </h4>
+                <Select
+                  value={caseData.status}
+                  onChange={(e) =>
+                    updateStatus(e.target.value as CaseRecord["status"])
+                  }
+                  options={[
+                    {
+                      value: "new",
+                      label: "New",
+                    },
+                    {
+                      value: "underReview",
+                      label: "Under Review",
+                    },
+                    {
+                      value: "escalated",
+                      label: "Escalated",
+                    },
+                    {
+                      value: "strSubmitted",
+                      label: "STR Submitted",
+                    },
+                    {
+                      value: "closed",
+                      label: "Closed",
+                    },
+                  ]}
+                  fullWidth
+                  disabled={
+                    caseData.status === "strSubmitted" ||
+                    caseData.status === "closed"
+                  }
+                />
+                <p className="text-xs text-text-secondary mt-3">
+                  Reopen requests require supervisor approval
+                </p>
+              </Card>
+            </div>
+
+            {/* Discussion & Collaboration */}
+            <Card>
+              <h4 className="heading-6 text-primary m-0 mb-4">Discussion</h4>
+
+              {/* Messages */}
+              <div className="bg-bg-secondary rounded-lg p-4 mb-4 max-h-64 overflow-y-auto space-y-3">
+                {discussion.length > 0 ? (
+                  discussion.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className="text-sm text-text-primary border-l-2 border-primary pl-3"
+                    >
+                      {msg}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-text-tertiary italic">
+                    No messages yet. Start a discussion to collaborate with
+                    investigators.
+                  </p>
+                )}
               </div>
 
-              <h3>Attachments</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {attachments.map((a, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span>{a}</span>
-                    <button
-                      style={{
-                        ...buttonBaseStyle,
-                        fontSize: 12,
-                        padding: "2px 6px",
-                      }}
-                      onClick={() => setAttachments(attachments.filter((_, idx) => idx !== i))}
+              {/* New Message Input */}
+              <div className="space-y-3">
+                <textarea
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Add a note or question for collaboration..."
+                  className="input w-full"
+                  rows={3}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    fullWidth
+                    onClick={async () => {
+                      if (newMessage.trim() && caseData) {
+                        await amlAPI.postCaseDiscussion(
+                          caseData.id,
+                          newMessage.trim()
+                        );
+                        setDiscussion([
+                          ...discussion,
+                          `You: ${newMessage.trim()}`,
+                        ]);
+                        setNewMessage("");
+                      }
+                    }}
+                  >
+                    Post Message
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    fullWidth
+                    onClick={escalateToSTR}
+                    disabled={
+                      caseData.status === "escalated" ||
+                      caseData.status === "strSubmitted" ||
+                      caseData.status === "closed"
+                    }
+                  >
+                    Escalate to STR
+                  </Button>
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="mt-6 pt-6 border-t border-border">
+                <h5 className="heading-6 text-primary m-0 mb-3">Tags</h5>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {tags.map((tag, idx) => (
+                    <Badge key={idx} variant="primary">
+                      {tag}
+                      <button
+                        className="ml-2 cursor-pointer opacity-70 hover:opacity-100"
+                        onClick={() =>
+                          setTags(tags.filter((_, i) => i !== idx))
+                        }
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <FormInput
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    placeholder="Add tag"
+                    size="sm"
+                    fullWidth
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      const tag = newTag.trim();
+                      if (tag) {
+                        setTags([...tags, tag]);
+                        setNewTag("");
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+              </div>
+
+              {/* Attachments */}
+              <div className="mt-6 pt-6 border-t border-border">
+                <h5 className="heading-6 text-primary m-0 mb-3">
+                  Attachments
+                </h5>
+                <div className="space-y-2 mb-3">
+                  {attachments.map((a, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between bg-bg-secondary p-2 rounded text-sm"
                     >
-                      Remove
-                    </button>
-                  </div>
-                ))}
+                      <span>📎 {a}</span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          setAttachments(attachments.filter((_, idx) => idx !== i))
+                        }
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                </div>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  style={{ display: "none" }}
+                  className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
                       setAttachments([...attachments, file.name]);
                     }
-                    // Clear so same file can be selected again
                     e.target.value = "";
                   }}
                 />
-                <button
-                  style={{
-                    cursor: "pointer",
-                    border: "1px solid white",
-                    borderRadius: 4,
-                    background: "transparent",
-                    padding: "6px 10px",
-                    color: "#f9fafb",
-                  }}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  fullWidth
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  Upload document
-                </button>
+                  📤 Upload Document
+                </Button>
               </div>
+            </Card>
+          </div>
 
-              <h3>Tags</h3>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
-                {tags.map((tag, idx) => (
-                  <span
-                    key={idx}
-                    style={{
-                      padding: "2px 8px",
-                      borderRadius: 12,
-                      background: "#1f2937",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
-                    {tag}
-                    <button
-                      style={{ fontSize: 10, padding: "2px 4px", cursor: "pointer" }}
-                      onClick={() => setTags(tags.filter((_, i) => i !== idx))}
+          {/* Right Column: Audit Timeline */}
+          <div className="lg:col-span-1">
+            <Card>
+              <h4 className="heading-6 text-primary m-0 mb-4">
+                Audit Timeline
+              </h4>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {audit.length > 0 ? (
+                  audit.map((entry, idx) => (
+                    <div
+                      key={idx}
+                      className="text-xs border-l-2 border-primary pl-3 py-2"
                     >
-                      ×
-                    </button>
-                  </span>
-                ))}
+                      <p className="text-text-secondary">{entry}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-text-tertiary italic">
+                    No audit entries yet. Case activity will appear here.
+                  </p>
+                )}
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  value={newTag}
-                  onChange={(e) => setNewTag(e.target.value)}
-                  placeholder="Add tag"
-                  style={{ flex: 1, padding: 6, background: "#111827", color: "#f9fafb", border: "1px solid #334155", borderRadius: 4 }}
-                />
-                <button
-                  style={buttonBaseStyle}
-                  onClick={() => {
-                    const tag = newTag.trim();
-                    if (tag) {
-                      setTags([...tags, tag]);
-                      setNewTag("");
-                    }
-                  }}
-                >
-                  Add
-                </button>
-              </div>
-            </section>
-
-            {/* audit timeline */}
-            <section style={{ background: "#0b1220", padding: 12, borderRadius: 6 }}>
-              <h2>Audit Timeline</h2>
-              <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                {audit.length ? audit.map((e, i) => <div key={i}>{e}</div>) : '[status changes / activity log with timestamps & IPs]'}
-              </div>
-            </section>
+            </Card>
           </div>
         </div>
       )}
 
-      {!caseData && <div>{loadingList ? "Loading cases..." : "No cases found."}</div>}
+      {!caseData && !loadingCase && (
+        <AlertBanner
+          type="info"
+          title="No Case Selected"
+          message="Select a case from the dropdown above to view details and manage the investigation."
+        />
+      )}
     </div>
   );
 }

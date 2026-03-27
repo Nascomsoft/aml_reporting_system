@@ -1,14 +1,25 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { handleApiError } from "@/lib/errorHandler";
+import { requireAuth } from "@/lib/session";
 
 export async function GET() {
   try {
-    // Group institutions by region, average risk scores
-    const institutions = await prisma.institution.findMany({
-      where: { isActive: true },
-      select: { region: true, riskScore: true },
-    });
+    const user = await requireAuth();
+    
+    // Officers see only their institution; admin/regulator see all
+    let institutions;
+    if (user.role === "compliance_officer" && user.institutionId) {
+      institutions = await prisma.institution.findMany({
+        where: { isActive: true, id: user.institutionId },
+        select: { region: true, riskScore: true },
+      });
+    } else {
+      institutions = await prisma.institution.findMany({
+        where: { isActive: true },
+        select: { region: true, riskScore: true },
+      });
+    }
 
     const regionMap = new Map<string, number[]>();
     for (const inst of institutions) {

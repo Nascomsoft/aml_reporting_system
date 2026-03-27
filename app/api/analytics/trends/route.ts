@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { handleApiError } from "@/lib/errorHandler";
+import { requireAuth } from "@/lib/session";
 
 export async function GET(request: Request) {
   try {
+    const user = await requireAuth();
     const url = new URL(request.url);
     const timeRange = url.searchParams.get("timeRange") || "24h";
 
@@ -17,9 +19,14 @@ export async function GET(request: Request) {
     const ms = rangeMs[timeRange] ?? rangeMs["24h"];
     const since = new Date(Date.now() - ms);
 
+    // Build where clause based on role
+    const whereClause = user.role === "compliance_officer" && user.institutionId
+      ? { timestamp: { gte: since }, institutionId: user.institutionId }
+      : { timestamp: { gte: since } };
+
     // Fetch all alerts within the range
     const alerts = await prisma.alert.findMany({
-      where: { timestamp: { gte: since } },
+      where: whereClause,
       select: { timestamp: true },
       orderBy: { timestamp: "asc" },
     });

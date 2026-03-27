@@ -25,22 +25,22 @@ async function main() {
   // ─── Create Institutions ─────────────────────────────────────────────
   const institutions = await Promise.all([
     prisma.institution.create({
-      data: { name: "National Bank of Ethiopia", code: "NBE", region: "North", riskScore: 45, branchCount: 120 },
+      data: { name: "Guaranty Trust Bank", code: "GTB", region: "Lagos", riskScore: 45, branchCount: 220 },
     }),
     prisma.institution.create({
-      data: { name: "Commercial Bank of Ethiopia", code: "CBE", region: "North", riskScore: 62, branchCount: 1800 },
+      data: { name: "Access Bank Nigeria", code: "ACCESS", region: "Lagos", riskScore: 62, branchCount: 650 },
     }),
     prisma.institution.create({
-      data: { name: "Dashen Bank", code: "DASHEN", region: "East", riskScore: 78, branchCount: 450 },
+      data: { name: "Zenith Bank", code: "ZENITH", region: "South-West", riskScore: 78, branchCount: 480 },
     }),
     prisma.institution.create({
-      data: { name: "Awash International Bank", code: "AIB", region: "South", riskScore: 55, branchCount: 600 },
+      data: { name: "First Bank Nigeria", code: "FIRSTBANK", region: "South-South", riskScore: 55, branchCount: 720 },
     }),
     prisma.institution.create({
-      data: { name: "Bank of Abyssinia", code: "BOA", region: "West", riskScore: 88, branchCount: 380 },
+      data: { name: "Sterling Bank", code: "STERLING", region: "North-Central", riskScore: 88, branchCount: 420 },
     }),
     prisma.institution.create({
-      data: { name: "Wegagen Bank", code: "WEGAGEN", region: "East", riskScore: 41, branchCount: 320 },
+      data: { name: "United Bank for Africa", code: "UBA", region: "North-East", riskScore: 41, branchCount: 580 },
     }),
   ]);
   console.log(`  Created ${institutions.length} institutions`);
@@ -51,7 +51,7 @@ async function main() {
   const users = await Promise.all([
     prisma.user.create({
       data: {
-        email: "admin@aml.gov.et",
+        email: "admin@aml.gov.ng",
         name: "System Administrator",
         password: hashedPw,
         role: "ADMIN",
@@ -59,8 +59,8 @@ async function main() {
     }),
     prisma.user.create({
       data: {
-        email: "officer@cbe.com.et",
-        name: "Abebe Kebede",
+        email: "officer@access.com.ng",
+        name: "Chioma Okonkwo",
         password: hashedPw,
         role: "COMPLIANCE_OFFICER",
         institutionId: institutions[1].id,
@@ -68,8 +68,8 @@ async function main() {
     }),
     prisma.user.create({
       data: {
-        email: "officer@dashen.com.et",
-        name: "Tigist Alemu",
+        email: "officer@zenith.com.ng",
+        name: "Aisha Musa",
         password: hashedPw,
         role: "COMPLIANCE_OFFICER",
         institutionId: institutions[2].id,
@@ -77,8 +77,8 @@ async function main() {
     }),
     prisma.user.create({
       data: {
-        email: "regulator@nbe.gov.et",
-        name: "Mulugeta Haile",
+        email: "regulator@cbn.gov.ng",
+        name: "Zainab Hassan",
         password: hashedPw,
         role: "REGULATOR",
         institutionId: institutions[0].id,
@@ -86,8 +86,8 @@ async function main() {
     }),
     prisma.user.create({
       data: {
-        email: "officer@awash.com.et",
-        name: "Sara Tesfaye",
+        email: "officer@firstbank.com.ng",
+        name: "Tunde Olusegun",
         password: hashedPw,
         role: "COMPLIANCE_OFFICER",
         institutionId: institutions[3].id,
@@ -168,12 +168,12 @@ async function main() {
   // ─── Create Transactions ─────────────────────────────────────────────
   const txTypes = ["DEPOSIT", "WITHDRAWAL", "TRANSFER", "WIRE", "CASH", "CHECK"] as const;
   const txStatuses = ["NORMAL", "FLAGGED", "UNDER_REVIEW", "CLEARED"] as const;
-  const countries = ["Ethiopia", "Kenya", "UAE", "USA", "UK", "Somalia", "Djibouti", "Sudan"];
+  const countries = ["Nigeria", "Ghana", "UK", "USA", "UAE", "Cameroon", "Benin", "Niger"];
   const customerNames = [
-    "Yohannes Gebru", "Meron Tadesse", "Ahmed Hassan", "Frehiwot Demeke",
-    "Dawit Mekonnen", "Hana Worku", "Ibrahim Ali", "Bethlehem Assefa",
-    "Tesfaye Girma", "Selam Bekele", "Mohammed Abdi", "Rahel Tsegaye",
-    "Girma Desta", "Aida Mohammed", "Berhanu Negash", "Zewditu Hailu"
+    "Chioma Okafor", "Emeka Nwosu", "Aisha Yusuf", "Titilayo Adeyemi",
+    "Adebayo Oluwaseun", "Zainab Mohammed", "Ifeanyi Ezekiel", "Hana Okechukwu",
+    "Tunde Adekunle", "Blessing Obi", "Mahmoud Ibrahim", "Hauwa Abubakar",
+    "Olufemi Ogunleye", "Amara Onwuka", "Kayode Adeleke", "Fatima Hassan"
   ];
 
   const transactions = [];
@@ -189,7 +189,7 @@ async function main() {
       accountNumber: `ACC-${String(1000 + (i % 50)).padStart(7, "0")}`,
       customerName: customerNames[i % customerNames.length],
       amount,
-      currency: "ETB",
+      currency: "NGN",
       transactionType: txTypes[i % txTypes.length],
       country: countries[i % countries.length],
       riskScore: isFlagged ? Math.floor(Math.random() * 40) + 60 : Math.floor(Math.random() * 40),
@@ -352,6 +352,7 @@ async function main() {
   for (let i = 0; i < 7; i++) {
     const c = cases[i + 13]; // from STR_SUBMITTED and CLOSED cases
     const statuses = ["SUBMITTED", "UNDER_REVIEW", "CLOSED"] as const;
+    const riskClassifications = i < 3 ? "CRITICAL" : "HIGH"; // Must be uppercase enum values for Prisma
 
     await prisma.sTRSubmission.create({
       data: {
@@ -363,7 +364,7 @@ async function main() {
         transactionIds: [`TXN-${String(i + 1).padStart(6, "0")}`],
         behavioralDeviations: ["Unusual transaction volume", "New beneficiary pattern", "Cross-border transfers to high-risk jurisdictions"],
         narrative: "The customer exhibited transaction patterns consistent with money laundering typologies. Multiple deposits were made just below the reporting threshold, followed by rapid wire transfers to offshore accounts.",
-        riskClassification: i < 3 ? "CRITICAL" : "HIGH",
+        riskClassification: riskClassifications,
         supportingDocuments: [],
         status: statuses[i % statuses.length],
         caseId: c?.id,
@@ -422,11 +423,11 @@ async function main() {
 
   console.log("\n✅ Database seeded successfully!");
   console.log("\n📋 Login credentials:");
-  console.log("  Admin:      admin@aml.gov.et / password123");
-  console.log("  Officer:    officer@cbe.com.et / password123");
-  console.log("  Officer 2:  officer@dashen.com.et / password123");
-  console.log("  Regulator:  regulator@nbe.gov.et / password123");
-  console.log("  Officer 3:  officer@awash.com.et / password123");
+  console.log("  Admin:      admin@aml.gov.ng / password123");
+  console.log("  Officer:    officer@access.com.ng / password123");
+  console.log("  Officer 2:  officer@zenith.com.ng / password123");
+  console.log("  Regulator:  regulator@cbn.gov.ng / password123");
+  console.log("  Officer 3:  officer@firstbank.com.ng / password123");
 }
 
 main()

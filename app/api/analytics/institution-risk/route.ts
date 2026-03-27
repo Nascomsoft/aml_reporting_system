@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { handleApiError } from "@/lib/errorHandler";
+import { requireRole } from "@/lib/session";
 
 export async function GET() {
   try {
+    // Restrict institution risk analysis to admin and regulator
+    await requireRole("admin", "regulator");
+    
     const institutions = await prisma.institution.findMany({
       where: { isActive: true },
       select: { name: true, riskScore: true },

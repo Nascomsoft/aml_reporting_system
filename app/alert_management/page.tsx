@@ -2,241 +2,579 @@
 
 import React, { useState } from "react";
 import {
-    AlertResponse,
-    amlAPI,
+  AlertResponse,
+  amlAPI,
 } from "../../AML_frontend/services/api";
+import {
+  Card,
+  Badge,
+  Button,
+  FormInput,
+  Select,
+  Table,
+  Modal,
+  AlertBanner,
+} from "@/components";
+import { formatNGN, formatDateNG, formatDateTimeNG } from "@/lib/localization";
 
-// simple augmentation of alert type for management UI
+// augmentation of alert type for management UI
 interface ManagedAlert extends AlertResponse {
-    customerName: string;
-    riskScore: number; // 0-100
-    amount: number;
-    ruleTriggered: string;
-    detectionSource: "edge" | "core";
-    lifecycleStage: "new" | "underReview" | "escalated" | "closed";
-    slaRemainingHours: number;
-    institution?: string;
+  customerName: string;
+  riskScore: number; // 0-100
+  amount: number;
+  ruleTriggered: string;
+  detectionSource: "edge" | "core";
+  lifecycleStage: "new" | "underReview" | "escalated" | "closed";
+  slaRemainingHours: number;
+  institution?: string;
+}
+
+interface FilterState {
+  dateFrom: string;
+  dateTo: string;
+  riskLevel: string;
+  lifecycleStage: string;
+  detectionSource: string;
+  institution: string;
+  amountMin: string;
+  amountMax: string;
 }
 
 export default function AlertManagement() {
-    const [alerts, setAlerts] = useState<ManagedAlert[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [filters, setFilters] = useState({
-        dateFrom: "",
-        dateTo: "",
-        riskLevel: "",
-        lifecycleStage: "",
-        detectionSource: "",
-        institution: "",
-        amountMin: "",
-        amountMax: "",
+  const [alerts, setAlerts] = useState<ManagedAlert[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [selectedAlert, setSelectedAlert] = useState<ManagedAlert | null>(null);
+  const [showTransitionModal, setShowTransitionModal] = useState(false);
+  const [pendingTransition, setPendingTransition] = useState<string>("");
+  const [transitionNotes, setTransitionNotes] = useState("");
+  const [isLargeScreen, setIsLargeScreen] = useState(true);
+
+  const [filters, setFilters] = useState<FilterState>({
+    dateFrom: "",
+    dateTo: "",
+    riskLevel: "",
+    lifecycleStage: "",
+    detectionSource: "",
+    institution: "",
+    amountMin: "",
+    amountMax: "",
+  });
+
+  // Handle responsive screen size
+  React.useEffect(() => {
+    setIsLargeScreen(typeof window !== "undefined" && window.innerWidth >= 1024);
+    
+    const handleResize = () => {
+      setIsLargeScreen(typeof window !== "undefined" && window.innerWidth >= 1024);
+    };
+    
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Fetch alerts whenever filters change
+  React.useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const resp = await amlAPI.getAlerts(1, 50, {
+          severity: filters.riskLevel,
+          detectionType: filters.detectionSource,
+          lifecycleStage: filters.lifecycleStage,
+          institution: filters.institution,
+          dateFrom: filters.dateFrom,
+          dateTo: filters.dateTo,
+          amountMin: filters.amountMin,
+          amountMax: filters.amountMax,
+        });
+        const mapped: ManagedAlert[] = resp.alerts.map((a): ManagedAlert => ({
+          ...a,
+          customerName: (a as any).customerName || a.institution || "--",
+          riskScore: (a as any).riskScore ?? (a.severity === 'critical' ? 90 : a.severity === 'high' ? 70 : a.severity === 'medium' ? 50 : 20),
+          amount: (a as any).amount ?? 0,
+          ruleTriggered: (a as any).ruleTriggered || "N/A",
+          detectionSource: a.detectionType as "edge" | "core",
+          lifecycleStage: (a as any).lifecycleStage || 'new',
+          slaRemainingHours: a.slsRemaining,
+        }));
+        setAlerts(mapped);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [filters]);
+
+  const updateFilter = (key: keyof FilterState, value: string) => {
+    setFilters((f) => ({ ...f, [key]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      dateFrom: "",
+      dateTo: "",
+      riskLevel: "",
+      lifecycleStage: "",
+      detectionSource: "",
+      institution: "",
+      amountMin: "",
+      amountMax: "",
     });
+  };
 
-    // fetch alerts from backend whenever filters change
-    React.useEffect(() => {
-        async function load() {
-            setLoading(true);
-            try {
-                const resp = await amlAPI.getAlerts(1, 50, {
-                    severity: filters.riskLevel,
-                    detectionType: filters.detectionSource,
-                    lifecycleStage: filters.lifecycleStage,
-                    institution: filters.institution,
-                    dateFrom: filters.dateFrom,
-                    dateTo: filters.dateTo,
-                    amountMin: filters.amountMin,
-                    amountMax: filters.amountMax,
-                });
-                const mapped: ManagedAlert[] = resp.alerts.map((a): ManagedAlert => ({
-                    ...a,
-                    customerName: (a as any).customerName || a.institution || "--",
-                    riskScore: (a as any).riskScore ?? (a.severity === 'critical' ? 90 : a.severity === 'high' ? 70 : a.severity === 'medium' ? 50 : 20),
-                    amount: (a as any).amount ?? 0,
-                    ruleTriggered: (a as any).ruleTriggered || "N/A",
-                    detectionSource: a.detectionType as "edge" | "core",
-                    lifecycleStage: (a as any).lifecycleStage || 'new',
-                    slaRemainingHours: a.slsRemaining,
-                }));
-                setAlerts(mapped);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        }
-        load();
-    }, [filters]);
-    const [selectedAlert, setSelectedAlert] = useState<ManagedAlert | null>(null);
-    const [showTransitionModal, setShowTransitionModal] = useState(false);
-    const [pendingTransition, setPendingTransition] = useState<string>("");
+  const requestTransition = (alert: ManagedAlert, targetStage: string) => {
+    setSelectedAlert(alert);
+    setPendingTransition(targetStage);
+    setTransitionNotes("");
+    setShowTransitionModal(true);
+  };
 
-    // filter handler updates state
-    const updateFilter = (key: string, value: string) => {
-        setFilters((f) => ({ ...f, [key]: value }));
-    };
+  const confirmTransition = async () => {
+    if (selectedAlert) {
+      try {
+        await amlAPI.updateAlertLifecycle(selectedAlert.id, pendingTransition);
+        selectedAlert.lifecycleStage = pendingTransition as any;
+        setAlerts([...alerts]);
+      } catch (err) {
+        console.error("failed to update alert", err);
+      }
+    }
+    setShowTransitionModal(false);
+    setPendingTransition("");
+  };
 
-    // open confirmation modal before lifecycle transition
-    const requestTransition = (alert: ManagedAlert, targetStage: string) => {
-        setSelectedAlert(alert);
-        setPendingTransition(targetStage);
-        setShowTransitionModal(true);
-    };
+  // Count critical & overdue alerts
+  const criticalCount = alerts.filter((a) => a.severity === "critical").length;
+  const overdueCount = alerts.filter((a) => a.slaRemainingHours < 4).length;
 
-    const confirmTransition = async () => {
-        if (selectedAlert) {
-            try {
-                await amlAPI.updateAlertLifecycle(selectedAlert.id, pendingTransition);
-                // update local state after successful patch
-                selectedAlert.lifecycleStage = pendingTransition as any;
-                setAlerts([...alerts]);
-            } catch (err) {
-                console.error("failed to update alert", err);
-            }
-        }
-        setShowTransitionModal(false);
-        setPendingTransition("");
-    };
+  // Risk color mapping
+  const getRiskColor = (severity: string) => {
+    switch (severity) {
+      case "critical": return "danger";
+      case "high": return "warning";
+      case "medium": return "warning";
+      default: return "primary";
+    }
+  };
 
-    return (
-        <div style={{ padding: 20, fontFamily: "Inter, sans-serif", color: "#e5e7eb" }}>
-            <h1 style={{ fontSize: 24, marginBottom: 16 }}>Alert Management</h1>
+  // Lifecycle color mapping
+  const getLifecycleColor = (stage: string) => {
+    switch (stage) {
+      case "new": return "primary";
+      case "underReview": return "warning";
+      case "escalated": return "danger";
+      case "closed": return "success";
+      default: return "primary";
+    }
+  };
 
-            {/* filter section */}
-            <section style={{ marginBottom: 20, background: "#0b1220", padding: 12, borderRadius: 6 }}>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-                    <input type="date" value={filters.dateFrom} onChange={(e) => updateFilter("dateFrom", e.target.value)} placeholder="From" style={{ padding: 6, borderRadius: 4 }} />
-                    <input type="date" value={filters.dateTo} onChange={(e) => updateFilter("dateTo", e.target.value)} placeholder="To" style={{ padding: 6, borderRadius: 4 }} />
-                    <select value={filters.riskLevel} onChange={(e) => updateFilter("riskLevel", e.target.value)} style={{ padding: 6, borderRadius: 4, background: "#0b1220" }}>
-                        <option value="">All risk</option>
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                        <option value="critical">Critical</option>
-                    </select>
-                    <select value={filters.lifecycleStage} onChange={(e) => updateFilter("lifecycleStage", e.target.value)} style={{ padding: 6, borderRadius: 4, background: "#0b1220" }}>
-                        <option value="">Any stage</option>
-                        <option value="new">New</option>
-                        <option value="underReview">Under review</option>
-                        <option value="escalated">Escalated</option>
-                        <option value="closed">Closed</option>
-                    </select>
-                    <select value={filters.detectionSource} onChange={(e) => updateFilter("detectionSource", e.target.value)} style={{ padding: 6, borderRadius: 4, background: "#0b1220" }}>
-                        <option value="">All sources</option>
-                        <option value="edge">Edge</option>
-                        <option value="core">Core</option>
-                    </select>
-                    <input type="text" value={filters.institution} onChange={(e) => updateFilter("institution", e.target.value)} placeholder="Institution" style={{ padding: 6, borderRadius: 4 }} />
-                    <input
-                        type="number"
-                        value={filters.amountMin}
-                        onChange={(e) => updateFilter("amountMin", e.target.value)}
-                        placeholder="Min amount"
-                        className="whitePlaceholder"
-                        style={{ padding: 6, borderRadius: 4, background: "white" }}
-                    />
-                    <input
-                        type="number"
-                        value={filters.amountMax}
-                        onChange={(e) => updateFilter("amountMax", e.target.value)}
-                        placeholder="Max amount"
-                        className="whitePlaceholder"
-                        style={{ padding: 6, borderRadius: 4, background: "white" }}
-                    />
-                </div>
-            </section>
-
-            <style jsx>{`
-                .whitePlaceholder::placeholder {
-                    color: black;
-                }
-            `}</style>
-
-            {/* alerts table */}
-            {loading ? (
-                <div>Loading alerts...</div>
-            ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                    <tr style={{ textAlign: "left", borderBottom: "1px solid #333" }}>
-                        <th>Alert ID</th>
-                        <th>Customer</th>
-                        <th>Risk</th>
-                        <th>Amount</th>
-                        <th>Rule</th>
-                        <th>Source</th>
-                        <th>Severity</th>
-                        <th>Stage</th>
-                        <th>SLA</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {alerts.map((a) => (
-                        <tr key={a.id} style={{ borderBottom: "1px solid #222" }}>
-                            <td>{a.id}</td>
-                            <td>{a.customerName}</td>
-                            <td>
-                                {a.riskScore}
-                                <div style={{ width: 50, height: 8, background: `linear-gradient(to right, red ${a.riskScore}%, green ${a.riskScore}%)` }} />
-                            </td>
-                            <td>{a.amount.toLocaleString()}</td>
-                            <td>{a.ruleTriggered}</td>
-                            <td>{a.detectionSource}</td>
-                            <td>{a.severity}</td>
-                            <td>{a.lifecycleStage}</td>
-                            <td>{a.slaRemainingHours}h</td>
-                            <td>
-                                <button onClick={() => requestTransition(a, "underReview")} disabled={a.lifecycleStage !== "new"} style={{ marginRight: 4 }}>
-                                    Review
-                                </button>
-                                <button onClick={() => requestTransition(a, "escalated")} disabled={a.lifecycleStage === "closed"} style={{ marginRight: 4 }}>
-                                    Escalate
-                                </button>
-                                <button onClick={() => setSelectedAlert(a)} style={{ marginRight: 4 }}>
-                                    Details
-                                </button>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-                </table>
-            )}   
-
-            {/* confirmation modal */}
-            {showTransitionModal && selectedAlert && (
-                <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center" }}>
-                    <div style={{ background: "#0b1220", padding: 20, borderRadius: 6, width: 400 }}>
-                        <h2>Confirm transition</h2>
-                        <p>Change alert <strong>{selectedAlert.id}</strong> to <strong>{pendingTransition}</strong>?</p>
-                        <button onClick={confirmTransition} style={{ marginRight: 8 }}>Confirm</button>
-                        <button onClick={() => setShowTransitionModal(false)}>Cancel</button>
-                    </div>
-                </div>
-            )}
-
-            {/* investigation panel */}
-            {selectedAlert && (
-                <aside style={{ position: "fixed", right: 0, top: 0, bottom: 0, width: 320, background: "#111827", padding: 12, overflowY: "auto" }}>
-                    <h2>Investigation</h2>
-                    <div>
-                        <strong>Notes</strong>
-                        <textarea style={{ width: "100%", height: 100, marginTop: 4 }} />
-                    </div>
-                    <div style={{ marginTop: 12 }}>
-                        <strong>Timeline</strong>
-                        <div style={{ fontSize: 12, color: "#94a3b8" }}>[activity log here]</div>
-                    </div>
-                    <div style={{ marginTop: 12 }}>
-                        <strong>Related alerts</strong>
-                        <div style={{ fontSize: 12, color: "#94a3b8" }}>--none--</div>
-                    </div>
-                    <div style={{ marginTop: 12 }}>
-                        <strong>Linked accounts</strong>
-                        <div style={{ fontSize: 12, color: "#94a3b8" }}>--none--</div>
-                    </div>
-                    <button style={{ marginTop: 20 }} onClick={() => setSelectedAlert(null)}>Close</button>
-                </aside>
-            )}
+  return (
+    <div className="p-8 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="heading-2 text-primary m-0">Alert Management</h1>
+          <p className="text-text-secondary text-base mt-2">
+            Triage, review, and manage suspicious activity alerts
+          </p>
         </div>
-    );
+        <div className="flex items-center gap-2">
+          {criticalCount > 0 && (
+            <Badge variant="danger">
+              ⚠️ {criticalCount} Critical
+            </Badge>
+          )}
+          {overdueCount > 0 && (
+            <Badge variant="warning">
+              ⏰ {overdueCount} Overdue SLA
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Grid: Filters + Table */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Left: Filters Panel */}
+        <div className="lg:col-span-1">
+          <Card className="sticky top-20">
+            <div className="flex items-center justify-between mb-4">
+              <h6 className="heading-6 text-primary m-0">Filters</h6>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setFilterOpen(!filterOpen)}
+                className="lg:hidden"
+              >
+                {filterOpen ? "Hide" : "Show"}
+              </Button>
+            </div>
+
+            {(filterOpen || isLargeScreen) && (
+              <div className="space-y-4">
+                {/* Filter by Date Range */}
+                <div>
+                  <label className="text-xs font-semibold text-text-secondary block mb-2">
+                    Date Range
+                  </label>
+                  <FormInput
+                    type="date"
+                    value={filters.dateFrom}
+                    onChange={(e) => updateFilter("dateFrom", e.target.value)}
+                    placeholder="From"
+                    fullWidth
+                  />
+                  <FormInput
+                    type="date"
+                    value={filters.dateTo}
+                    onChange={(e) => updateFilter("dateTo", e.target.value)}
+                    placeholder="To"
+                    fullWidth
+                    className="mt-2"
+                  />
+                </div>
+
+                {/* Filter by Risk Level */}
+                <div>
+                  <label className="text-xs font-semibold text-text-secondary block mb-2">
+                    Risk Level
+                  </label>
+                  <Select
+                    value={filters.riskLevel}
+                    onChange={(e) => updateFilter("riskLevel", e.target.value)}
+                    options={[
+                      { value: "", label: "All Risk Levels" },
+                      { value: "low", label: "Low Risk" },
+                      { value: "medium", label: "Medium Risk" },
+                      { value: "high", label: "High Risk" },
+                      { value: "critical", label: "Critical Risk" },
+                    ]}
+                    fullWidth
+                  />
+                </div>
+
+                {/* Filter by Lifecycle */}
+                <div>
+                  <label className="text-xs font-semibold text-text-secondary block mb-2">
+                    Lifecycle Stage
+                  </label>
+                  <Select
+                    value={filters.lifecycleStage}
+                    onChange={(e) => updateFilter("lifecycleStage", e.target.value)}
+                    options={[
+                      { value: "", label: "All Stages" },
+                      { value: "new", label: "New" },
+                      { value: "underReview", label: "Under Review" },
+                      { value: "escalated", label: "Escalated" },
+                      { value: "closed", label: "Closed" },
+                    ]}
+                    fullWidth
+                  />
+                </div>
+
+                {/* Filter by Detection Source */}
+                <div>
+                  <label className="text-xs font-semibold text-text-secondary block mb-2">
+                    Detection Source
+                  </label>
+                  <Select
+                    value={filters.detectionSource}
+                    onChange={(e) => updateFilter("detectionSource", e.target.value)}
+                    options={[
+                      { value: "", label: "All Sources" },
+                      { value: "edge", label: "Edge (ML)" },
+                      { value: "core", label: "Core (Rules)" },
+                    ]}
+                    fullWidth
+                  />
+                </div>
+
+                {/* Filter by Institution */}
+                <FormInput
+                  label="Institution"
+                  value={filters.institution}
+                  onChange={(e) => updateFilter("institution", e.target.value)}
+                  placeholder="Bank name"
+                  fullWidth
+                />
+
+                {/* Filter by Amount Range */}
+                <div>
+                  <label className="text-xs font-semibold text-text-secondary block mb-2">
+                    Amount Range (NGN)
+                  </label>
+                  <FormInput
+                    type="number"
+                    value={filters.amountMin}
+                    onChange={(e) => updateFilter("amountMin", e.target.value)}
+                    placeholder="Min"
+                    fullWidth
+                  />
+                  <FormInput
+                    type="number"
+                    value={filters.amountMax}
+                    onChange={(e) => updateFilter("amountMax", e.target.value)}
+                    placeholder="Max"
+                    fullWidth
+                    className="mt-2"
+                  />
+                </div>
+
+                {/* Clear Button */}
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  onClick={clearFilters}
+                  size="sm"
+                >
+                  Clear All Filters
+                </Button>
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Right: Alerts Table */}
+        <div className="lg:col-span-3 space-y-4">
+          {/* Summary Stats */}
+          <div className="grid grid-cols-3 gap-4">
+            <Card>
+              <p className="text-xs text-text-secondary mb-1">Total Alerts</p>
+              <p className="heading-4 text-primary">{alerts.length}</p>
+            </Card>
+            <Card>
+              <p className="text-xs text-text-secondary mb-1">Critical</p>
+              <p
+                className="heading-4"
+                style={{ color: criticalCount > 0 ? "#dc2626" : "#16a34a" }}
+              >
+                {criticalCount}
+              </p>
+            </Card>
+            <Card>
+              <p className="text-xs text-text-secondary mb-1">SLA Overdue</p>
+              <p
+                className="heading-4"
+                style={{ color: overdueCount > 0 ? "#ea580c" : "#16a34a" }}
+              >
+                {overdueCount}
+              </p>
+            </Card>
+          </div>
+
+          {/* Alerts Table */}
+          <Card>
+            {loading ? (
+              <p className="text-text-secondary text-center py-8">
+                Loading alerts...
+              </p>
+            ) : alerts.length === 0 ? (
+              <p className="text-text-secondary text-center py-8">
+                No alerts match the current filters
+              </p>
+            ) : (
+              <Table
+                columns={[
+                  {
+                    key: "title",
+                    header: "Alert",
+                    width: "25%",
+                    render: (value, row) => (
+                      <div
+                        className="cursor-pointer hover:text-primary transition-colors"
+                        onClick={() => setSelectedAlert(row as ManagedAlert)}
+                      >
+                        <p className="font-semibold">{value}</p>
+                        <p className="text-xs text-text-tertiary mt-1">
+                          {row.customerName}
+                        </p>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "severity",
+                    header: "Risk",
+                    width: "12%",
+                    render: (value) => (
+                      <Badge variant={getRiskColor(value as string)}>
+                        {String(value).toUpperCase()}
+                      </Badge>
+                    ),
+                  },
+                  {
+                    key: "amount",
+                    header: "Amount",
+                    width: "14%",
+                    render: (value) => (
+                      <span className="font-semibold">
+                        {formatNGN(Number(value))}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "ruleTriggered",
+                    header: "Rule",
+                    width: "15%",
+                  },
+                  {
+                    key: "lifecycleStage",
+                    header: "Status",
+                    width: "12%",
+                    render: (value, row) => (
+                      <Badge variant={getLifecycleColor(value as string)}>
+                        {String(value).replace(/([A-Z])/g, " $1")}
+                      </Badge>
+                    ),
+                  },
+                  {
+                    key: "slsRemaining",
+                    header: "SLA",
+                    width: "10%",
+                    render: (value) => {
+                      const hours = Number(value);
+                      const isOverdue = hours < 4;
+                      return (
+                        <span
+                          className={`font-semibold ${
+                            isOverdue ? "text-danger-600" : "text-primary"
+                          }`}
+                        >
+                          {hours}h
+                        </span>
+                      );
+                    },
+                  },
+                  {
+                    key: "id",
+                    header: "Action",
+                    width: "12%",
+                    render: (value, row) => {
+                      const alert = row as ManagedAlert;
+                      return (
+                        <div className="flex gap-1">
+                          {alert.lifecycleStage === "new" && (
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={() =>
+                                requestTransition(alert, "underReview")
+                              }
+                            >
+                              Review
+                            </Button>
+                          )}
+                          {alert.lifecycleStage === "underReview" && (
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() =>
+                                requestTransition(alert, "escalated")
+                              }
+                            >
+                              Escalate
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    },
+                  },
+                ]}
+                data={alerts}
+                rowKey="id"
+                onRowClick={(row) => setSelectedAlert(row)}
+              />
+            )}
+          </Card>
+        </div>
+      </div>
+
+      {/* Transition Modal */}
+      <Modal
+        isOpen={showTransitionModal}
+        title={`Transition Alert: ${selectedAlert?.id}`}
+        onClose={() => {
+          setShowTransitionModal(false);
+          setTransitionNotes("");
+        }}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowTransitionModal(false);
+                setTransitionNotes("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={confirmTransition}>
+              Confirm Transition
+            </Button>
+          </>
+        }
+      >
+        {selectedAlert && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-text-secondary mb-2">
+                Alert ID: <span className="font-mono text-primary">{selectedAlert.id}</span>
+              </p>
+              <p className="text-sm text-text-secondary mb-2">
+                Current Status: <Badge variant="primary">{selectedAlert.lifecycleStage}</Badge>
+              </p>
+              <p className="text-sm text-text-secondary mb-2">
+                New Status:{" "}
+                <Badge variant={getLifecycleColor(pendingTransition)}>
+                  {pendingTransition}
+                </Badge>
+              </p>
+            </div>
+
+            <div className="bg-bg-secondary p-4 rounded-lg">
+              <p className="text-sm font-semibold text-primary mb-3">
+                Alert Details
+              </p>
+              <div className="space-y-2 text-sm">
+                <p>
+                  <span className="text-text-secondary">Institution:</span>{" "}
+                  <span className="font-semibold">{selectedAlert.institution}</span>
+                </p>
+                <p>
+                  <span className="text-text-secondary">Amount:</span>{" "}
+                  <span className="font-semibold">{formatNGN(selectedAlert.amount)}</span>
+                </p>
+                <p>
+                  <span className="text-text-secondary">Rule Triggered:</span>{" "}
+                  <span className="font-semibold">{selectedAlert.ruleTriggered}</span>
+                </p>
+                <p>
+                  <span className="text-text-secondary">Detection Source:</span>{" "}
+                  <Badge variant="primary">{selectedAlert.detectionSource}</Badge>
+                </p>
+                <p>
+                  <span className="text-text-secondary">SLA Remaining:</span>{" "}
+                  <span className="font-semibold">{selectedAlert.slaRemainingHours}h</span>
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-primary mb-2">
+                Transition Notes (Optional)
+              </label>
+              <textarea
+                value={transitionNotes}
+                onChange={(e) => setTransitionNotes(e.target.value)}
+                placeholder="Add notes about why you're making this transition..."
+                className="input"
+                rows={3}
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
 }

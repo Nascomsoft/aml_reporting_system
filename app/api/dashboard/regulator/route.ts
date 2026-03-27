@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { handleApiError } from "@/lib/errorHandler";
+import { requireRole } from "@/lib/session";
 
 export async function GET() {
   try {
+    await requireRole("regulator");
     const [institutions, strCount, onTimeCount, totalStr] = await Promise.all([
       prisma.institution.findMany({
         where: { isActive: true },

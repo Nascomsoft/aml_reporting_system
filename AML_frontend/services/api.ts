@@ -111,6 +111,40 @@ export interface InstitutionRiskResponse {
   }>;
 }
 
+export interface AdminMetricsResponse {
+  activeUsers: number;
+  dataProcessingRate: string; // e.g., "45 alerts/hr"
+  ruleEffectiveness: string; // e.g., "87%"
+  systemUptime: string; // e.g., "99.9%"
+  lastBackupTime: string;
+  monitoredInstitutions: number;
+  totalRules: number;
+  totalAlerts: number;
+}
+
+export interface STRComplianceResponse {
+  summary: {
+    totalSubmissions: number;
+    submitted: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+    complianceRate: string; // e.g., "92%"
+  };
+  institutionStats: Array<{
+    institution: string;
+    riskScore: number;
+    alertCount: number;
+  }>;
+  complianceTrends: Array<{
+    date: string;
+    PENDING?: number;
+    SUBMITTED?: number;
+    APPROVED?: number;
+    REJECTED?: number;
+  }>;
+}
+
 // case management types
 export interface CaseRecord {
   id: string;
@@ -205,7 +239,7 @@ export const amlAPI = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lifecycleStage }),
     });
-    if (!response.ok) throw new Error('Failed to update alert');
+    if (!response.ok) throw new Error("Failed to update alert");
   },
 
   /**
@@ -350,6 +384,26 @@ export const amlAPI = {
   },
 
   /**
+   * Fetch admin system metrics
+   * GET /api/analytics/admin-metrics
+   */
+  getAdminMetrics: async (): Promise<AdminMetricsResponse> => {
+    const response = await fetch(`${API_BASE_URL}/analytics/admin-metrics`);
+    if (!response.ok) throw new Error('Failed to fetch admin metrics');
+    return response.json();
+  },
+
+  /**
+   * Fetch STR compliance analytics
+   * GET /api/analytics/str-compliance
+   */
+  getSTRCompliance: async (): Promise<STRComplianceResponse> => {
+    const response = await fetch(`${API_BASE_URL}/analytics/str-compliance`);
+    if (!response.ok) throw new Error('Failed to fetch STR compliance');
+    return response.json();
+  },
+
+  /**
    * Export report
    * POST /api/reports/export
    * Body: { format: 'pdf' | 'csv' | 'xlsx', filters?: object }
@@ -363,7 +417,55 @@ export const amlAPI = {
     if (!response.ok) throw new Error('Failed to export report');
     return response.blob();
   },
+
+  /**
+   * Fetch transactions with optional filtering
+   * GET /api/transactions?limit=50&offset=0&status=FLAGGED&search=jane
+   * Query params: limit (default: 50), offset (default: 0), status (optional), search (optional)
+   */
+  getTransactions: async (
+    limit: number = 50,
+    offset: number = 0,
+    status?: string,
+    search?: string
+  ): Promise<TransactionsResponse> => {
+    const params = new URLSearchParams({ limit: limit.toString(), offset: offset.toString() });
+    if (status) params.append('status', status);
+    if (search) params.append('search', search);
+    const response = await fetch(`${API_BASE_URL}/transactions?${params}`);
+    if (!response.ok) throw new Error('Failed to fetch transactions');
+    return response.json();
+  },
 };
+
+// Transaction types for API responses
+export interface TransactionData {
+  id: string;
+  transactionRef: string;
+  customerName: string;
+  accountNumber: string;
+  amount: number;
+  currency: string;
+  transactionType: string;
+  country: string;
+  riskScore: number;
+  status: string;
+  flagReason?: string;
+  date: string;
+  institutionId: string;
+  institution: {
+    id: string;
+    name: string;
+    code: string;
+  };
+}
+
+export interface TransactionsResponse {
+  transactions: TransactionData[];
+  total: number;
+  limit: number;
+  offset: number;
+}
 
 // ============================================================================
 // CUSTOM HOOKS FOR DATA FETCHING
