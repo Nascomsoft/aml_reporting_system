@@ -94,6 +94,7 @@ export default function Dashboard() {
         value: kpi.data.totalAlerts,
         icon: "📊",
         subtext: `${kpi.data.alertSegmentation.new} new`,
+        trend: undefined,
       },
       {
         title: "Overdue Cases",
@@ -110,6 +111,7 @@ export default function Dashboard() {
         value: kpi.data.strSubmittedToday,
         icon: "📝",
         subtext: "Today",
+        trend: undefined,
       },
     ];
 
@@ -121,6 +123,7 @@ export default function Dashboard() {
           value: formatNumberShort(kpi.data.totalTransactions),
           icon: "💳",
           subtext: "Today",
+          trend: undefined,
         },
       ];
     } else if (role === "regulator") {
@@ -131,6 +134,7 @@ export default function Dashboard() {
           value: kpi.data.pendingRegulatoryReviews,
           icon: "✓",
           subtext: "Pending",
+          trend: undefined,
         },
       ];
     } else {
@@ -142,6 +146,7 @@ export default function Dashboard() {
           value: 42,
           icon: "⚙️",
           subtext: "In system",
+          trend: undefined,
         },
       ];
     }

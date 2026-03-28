@@ -179,12 +179,12 @@ export default function OfficerDashboard() {
       { key: "closed", label: "Closed", color: "#10b981" },
     ];
 
-    const maxValue = Math.max(...Object.values(lifecycle.data as Record<string, number>));
+    const maxValue = Math.max(...Object.values(lifecycle.data as unknown as Record<string, number>));
 
     return (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
         {stages.map(({ key, label, color }) => {
-          const value = (lifecycle.data as Record<string, number>)[key] ?? 0;
+          const value = (lifecycle.data as unknown as Record<string, number>)[key] ?? 0;
           const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
           return (
             <div key={key}>

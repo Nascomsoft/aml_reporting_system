@@ -10,16 +10,16 @@ export async function GET() {
     // Get STR submission metrics
     const [
       totalSubmissions,
+      draftCount,
       submittedCount,
-      pendingCount,
-      rejectedCount,
-      approvedCount,
+      underReviewCount,
+      closedCount,
     ] = await Promise.all([
       prisma.sTRSubmission.count(),
+      prisma.sTRSubmission.count({ where: { status: "DRAFT" } }),
       prisma.sTRSubmission.count({ where: { status: "SUBMITTED" } }),
-      prisma.sTRSubmission.count({ where: { status: "PENDING" } }),
-      prisma.sTRSubmission.count({ where: { status: "REJECTED" } }),
-      prisma.sTRSubmission.count({ where: { status: "APPROVED" } }),
+      prisma.sTRSubmission.count({ where: { status: "UNDER_REVIEW" } }),
+      prisma.sTRSubmission.count({ where: { status: "CLOSED" } }),
     ]);
 
     // Get institution-wise submission stats
@@ -52,10 +52,10 @@ export async function GET() {
     for (const sub of recentSubmissions) {
       const dateKey = sub.createdAt.toISOString().split("T")[0];
       const dayData = submissionsByDay.get(dateKey) ?? {
-        PENDING: 0,
+        DRAFT: 0,
         SUBMITTED: 0,
-        APPROVED: 0,
-        REJECTED: 0,
+        UNDER_REVIEW: 0,
+        CLOSED: 0,
       };
       dayData[sub.status] = (dayData[sub.status] ?? 0) + 1;
       submissionsByDay.set(dateKey, dayData);
@@ -71,16 +71,16 @@ export async function GET() {
     // Calculate compliance rate
     const complianceRate =
       totalSubmissions > 0
-        ? Math.round(((submittedCount + approvedCount) / totalSubmissions) * 100)
+        ? Math.round(((submittedCount + underReviewCount) / totalSubmissions) * 100)
         : 0;
 
     return NextResponse.json({
       summary: {
         totalSubmissions,
+        draft: draftCount,
         submitted: submittedCount,
-        pending: pendingCount,
-        approved: approvedCount,
-        rejected: rejectedCount,
+        underReview: underReviewCount,
+        closed: closedCount,
         complianceRate: `${complianceRate}%`,
       },
       institutionStats: institutionStats.map((inst) => ({

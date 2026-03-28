@@ -421,7 +421,6 @@ export default function CaseManagement() {
                     value={newTag}
                     onChange={(e) => setNewTag(e.target.value)}
                     placeholder="Add tag"
-                    size="sm"
                     fullWidth
                   />
                   <Button

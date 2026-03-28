@@ -311,7 +311,7 @@ export default function RegulatorPage() {
           <div className="space-y-4">
             <h2 className="heading-3 text-primary m-0">STR Compliance Analytics</h2>
             {strCompliance.loading && <div className="text-text-secondary">Loading compliance data...</div>}
-            {strCompliance.error && <AlertBanner variant="danger" title="Error" message={strCompliance.error} />}
+            {strCompliance.error && <AlertBanner type="danger" title="Error" message={strCompliance.error} />}
             {strCompliance.data && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <KPICard

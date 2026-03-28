@@ -322,7 +322,7 @@ export default function AdminPage() {
           <div className="space-y-4">
             <h2 className="heading-3 text-primary m-0">System Analytics</h2>
             {adminMetrics.loading && <div className="text-text-secondary">Loading metrics...</div>}
-            {adminMetrics.error && <AlertBanner variant="danger" title="Error" message={adminMetrics.error} />}
+            {adminMetrics.error && <AlertBanner type="danger" title="Error" message={adminMetrics.error} />}
             {adminMetrics.data && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <KPICard
