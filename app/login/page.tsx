@@ -55,9 +55,17 @@ export default function LoginPage() {
         }
       } else {
         console.log(`[${timestamp}] [LOGIN] SUCCESS: Authentication successful for: ${maskedEmail}`);
-        console.log(`[${timestamp}] [LOGIN] Redirecting to home page...`);
+        console.log(`[${timestamp}] [LOGIN] Session cookie should be set now. Waiting before redirect...`);
         
+        // Small delay to ensure session cookie is properly persisted in serverless environment
+        // This is especially important on Vercel where the cookie needs time to be set
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        console.log(`[${timestamp}] [LOGIN] Redirecting to home page...`);
         router.push("/");
+        
+        // Give the router a moment to navigate before refresh
+        await new Promise(resolve => setTimeout(resolve, 100));
         router.refresh();
         
         console.log(`[${timestamp}] [LOGIN] Navigation completed`);

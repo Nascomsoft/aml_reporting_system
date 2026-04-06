@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 import { fromUserRole } from "@/lib/enumMaps";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  trustHost: true, // Critical for Vercel: trust X-Forwarded-Proto headers for HTTPS detection
   providers: [
     Credentials({
       name: "credentials",
@@ -98,6 +99,36 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   pages: {
     signIn: "/login",
+  },
+  cookies: {
+    // Critical for Vercel: explicitly configure cookies for serverless
+    sessionToken: {
+      name: `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production", // Use secure cookies in production
+        sameSite: "lax",
+        path: "/",
+      },
+    },
+    callbackUrl: {
+      name: `next-auth.callback-url`,
+      options: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+      },
+    },
+    csrfToken: {
+      name: `next-auth.csrf-token`,
+      options: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+      },
+    },
   },
   callbacks: {
     async jwt({ token, user }) {
