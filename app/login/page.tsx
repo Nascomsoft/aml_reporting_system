@@ -1,17 +1,27 @@
 "use client";
 
 import React, { useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button, FormInput, AlertBanner } from "@/components";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState("bank_officer");
+
+  // If already logged in, redirect to dashboard
+  React.useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      console.log("[LOGIN] User already authenticated, redirecting to dashboard");
+      router.push("/");
+      router.refresh();
+    }
+  }, [status, session, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +53,7 @@ export default function LoginPage() {
           error: result.error,
           status: result.status,
           ok: result.ok,
+          errorCode: result.status,
         });
         
         // Show more specific error messages based on result code
@@ -53,19 +64,28 @@ export default function LoginPage() {
         } else {
           setError(errorMsg || "Invalid email or password");
         }
+      } else if (!result?.ok) {
+        console.error(`[${timestamp}] [LOGIN] FAILED: signIn returned but !ok`, { result });
+        setError("Authentication failed. Please try again.");
       } else {
         console.log(`[${timestamp}] [LOGIN] SUCCESS: Authentication successful for: ${maskedEmail}`);
-        console.log(`[${timestamp}] [LOGIN] Session cookie should be set now. Waiting before redirect...`);
+        console.log(`[${timestamp}] [LOGIN] Session should be created. Waiting before redirect...`);
         
-        // Small delay to ensure session cookie is properly persisted in serverless environment
-        // This is especially important on Vercel where the cookie needs time to be set
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Wait for session cookie to be set before redirecting
+        // This is critical on Vercel serverless
+        for (let i = 0; i < 5; i++) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          // Try to get updated session
+          // Don't actually check here, just wait and then redirect
+          console.log(`[${timestamp}] [LOGIN] Wait cycle ${i + 1}/5...`);
+        }
         
         console.log(`[${timestamp}] [LOGIN] Redirecting to home page...`);
         router.push("/");
         
-        // Give the router a moment to navigate before refresh
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Give navigation a moment to complete
+        await new Promise(resolve => setTimeout(resolve, 500));
         router.refresh();
         
         console.log(`[${timestamp}] [LOGIN] Navigation completed`);

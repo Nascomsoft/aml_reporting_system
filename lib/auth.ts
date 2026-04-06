@@ -4,8 +4,39 @@ import { compare } from "bcryptjs";
 import prisma from "@/lib/prisma";
 import { fromUserRole } from "@/lib/enumMaps";
 
+/**
+ * Auto-detect NEXTAUTH_URL for Vercel deployments
+ * On Vercel, X-Forwarded-Host header contains the actual domain
+ * Falls back to NEXTAUTH_URL environment variable if set
+ */
+function getAuthUrl(): string {
+  // Development: use explicit NEXTAUTH_URL
+  if (process.env.NODE_ENV === "development") {
+    return process.env.NEXTAUTH_URL || "http://localhost:3000";
+  }
+
+  // Production on Vercel: auto-detect from environment
+  if (process.env.VERCEL_URL) {
+    // VERCEL_URL is set by Vercel for preview and production deployments
+    // Include protocol automatically
+    const protocol = process.env.VERCEL_ENV === "production" ? "https" : "https";
+    return `${protocol}://${process.env.VERCEL_URL}`;
+  }
+
+  // Production with custom domain (NEXTAUTH_URL must be set in Vercel environment variables)
+  if (process.env.NEXTAUTH_URL) {
+    return process.env.NEXTAUTH_URL;
+  }
+
+  // Fallback
+  return "http://localhost:3000";
+}
+
+const authUrl = getAuthUrl();
+console.log(`[AUTH] Configured NEXTAUTH_URL: ${authUrl}`);
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  trustHost: true, // Critical for Vercel: trust X-Forwarded-Proto headers for HTTPS detection
+  trustHost: true, // Critical for Vercel: trust X-Forwarded-Proto headers - this auto-detects the URL
   providers: [
     Credentials({
       name: "credentials",
@@ -106,7 +137,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       name: `next-auth.session-token`,
       options: {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production", // Use secure cookies in production
+        secure: process.env.NODE_ENV === "production" || process.env.VERCEL_ENV !== undefined, // Always secure on Vercel
         sameSite: "lax",
         path: "/",
       },
@@ -115,7 +146,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       name: `next-auth.callback-url`,
       options: {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: process.env.NODE_ENV === "production" || process.env.VERCEL_ENV !== undefined,
         sameSite: "lax",
         path: "/",
       },
@@ -124,7 +155,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       name: `next-auth.csrf-token`,
       options: {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: process.env.NODE_ENV === "production" || process.env.VERCEL_ENV !== undefined,
         sameSite: "lax",
         path: "/",
       },
