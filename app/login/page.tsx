@@ -17,24 +17,72 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
+    const startTime = Date.now();
+    const timestamp = new Date().toISOString();
+
+    const maskEmail = (e: string) => e.substring(0, 3) + "***";
+    const maskedEmail = maskEmail(email);
+
+    console.log(`[${timestamp}] [LOGIN] Form submission started for email: ${maskedEmail}`);
 
     try {
+      console.log(`[${timestamp}] [LOGIN] Calling signIn("credentials") for: ${maskedEmail}`);
+      
       const result = await signIn("credentials", {
         email,
         password,
         redirect: false,
       });
 
+      const elapsed = Date.now() - startTime;
+      console.log(`[${timestamp}] [LOGIN] signIn() completed in ${elapsed}ms. Result:`, result);
+
       if (result?.error) {
-        setError("Invalid email or password");
+        const errorMsg = result.error || "Unknown error";
+        console.error(`[${timestamp}] [LOGIN] FAILED: Authentication returned error: ${errorMsg}`, {
+          error: result.error,
+          status: result.status,
+          ok: result.ok,
+        });
+        
+        // Show more specific error messages based on result code
+        if (result.status === 401) {
+          setError("Invalid email or password");
+        } else if (result.status === 500) {
+          setError("Server error during authentication. Please try again later.");
+        } else {
+          setError(errorMsg || "Invalid email or password");
+        }
       } else {
+        console.log(`[${timestamp}] [LOGIN] SUCCESS: Authentication successful for: ${maskedEmail}`);
+        console.log(`[${timestamp}] [LOGIN] Redirecting to home page...`);
+        
         router.push("/");
         router.refresh();
+        
+        console.log(`[${timestamp}] [LOGIN] Navigation completed`);
       }
-    } catch {
-      setError("An unexpected error occurred");
+    } catch (error) {
+      const elapsed = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      console.error(`[${timestamp}] [LOGIN] CAUGHT EXCEPTION after ${elapsed}ms:`, {
+        message: errorMessage,
+        error,
+        stack: error instanceof Error ? error.stack : "No stack trace",
+        email: maskedEmail,
+      });
+
+      // Distinguish between timeout and other errors
+      if (elapsed > 10000) {
+        setError("Login request timed out. Please check your connection and try again.");
+      } else {
+        setError("An unexpected error occurred. Please try again.");
+      }
     } finally {
       setLoading(false);
+      const totalTime = Date.now() - startTime;
+      console.log(`[${timestamp}] [LOGIN] Form submission completed in ${totalTime}ms`);
     }
   };
 
