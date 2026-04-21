@@ -1,5 +1,6 @@
-import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+import { verifyAuthToken } from "@/lib/jwt";
 
 // Extend the session user type
 export interface SessionUser {
@@ -11,14 +12,47 @@ export interface SessionUser {
   institutionName: string | null;
 }
 
+async function getBearerToken(): Promise<string | null> {
+  const headerList = await headers();
+  const authorization = headerList.get("authorization") || headerList.get("Authorization");
+
+  if (authorization?.startsWith("Bearer ")) {
+    return authorization.slice(7).trim();
+  }
+
+  const tokenHeader = headerList.get("x-auth-token");
+  if (tokenHeader) {
+    return tokenHeader.trim();
+  }
+
+  return null;
+}
+
 /**
  * Get the current authenticated user from the session.
  * Returns null if not authenticated.
  */
 export async function getSessionUser(): Promise<SessionUser | null> {
-  const session = await auth();
-  if (!session?.user) return null;
-  return session.user as unknown as SessionUser;
+  const token = await getBearerToken();
+
+  if (!token) {
+    return null;
+  }
+
+  const payload = verifyAuthToken(token);
+
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    id: payload.id,
+    email: payload.email,
+    name: payload.name,
+    role: payload.role,
+    institutionId: payload.institutionId,
+    institutionName: payload.institutionName,
+  };
 }
 
 /**

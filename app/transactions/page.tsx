@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Card, Button, FormInput, Select } from "@/components";
 import { SimulationControls, type SimulationStatus } from "@/components/SimulationControls";
 import { LiveTransactionStream, type StreamTransaction } from "@/components/LiveTransactionStream";
+import { authFetch, authStreamUrl } from "@/lib/auth-client";
+import { useAuth } from "@/lib/auth-context";
+
+const fetch = authFetch;
 
 interface Transaction {
   id: string;
@@ -36,7 +39,7 @@ interface TransactionResponse {
 }
 
 export default function TransactionsPage() {
-  const { data: session } = useSession();
+  const { user } = useAuth();
   const router = useRouter();
 
   // Batch transactions state
@@ -83,13 +86,13 @@ export default function TransactionsPage() {
   }, [limit, offset, search, statusFilter]);
 
   useEffect(() => {
-    if (!session?.user) {
+    if (!user) {
       router.push("/login");
       return;
     }
 
     fetchTransactions();
-  }, [session, fetchTransactions, router]);
+  }, [fetchTransactions, router, user]);
 
   // Cleanup SSE connection on unmount
   useEffect(() => {
@@ -213,7 +216,7 @@ export default function TransactionsPage() {
         eventSourceRef.current.close();
       }
 
-      const eventSource = new EventSource("/api/transactions/simulator");
+      const eventSource = new EventSource(authStreamUrl("/api/transactions/simulator"));
 
       eventSource.addEventListener("open", () => {
         setIsConnected(true);
@@ -315,7 +318,7 @@ export default function TransactionsPage() {
   ];
 
   // Add institution column for admins and regulators
-  if (session?.user?.role !== "compliance_officer") {
+  if (user?.role !== "compliance_officer") {
     tableColumns.splice(4, 0, { header: "Institution", accessor: "institution.name", width: "12%" });
   }
 
@@ -325,7 +328,7 @@ export default function TransactionsPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-4xl font-bold mb-2">Transactions</h1>
-        <p className="text-gray-600">View all {session?.user?.role === "compliance_officer" ? "your institution's" : "system"} transactions</p>
+        <p className="text-gray-600">View all {user?.role === "compliance_officer" ? "your institution's" : "system"} transactions</p>
       </div>
 
       {/* Real-Time Simulation Section */}

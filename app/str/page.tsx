@@ -9,11 +9,14 @@ import {
   AlertBanner,
   Modal,
 } from "@/components";
+import { authFetch } from "@/lib/auth-client";
 import {
   formatNGN,
   formatDateNG,
   formatDateTimeNG,
 } from "@/lib/localization";
+
+const fetch = authFetch;
 
 // Type definitions for STR submission
 interface TransactionSummary {

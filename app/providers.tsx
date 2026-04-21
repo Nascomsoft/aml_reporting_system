@@ -1,12 +1,12 @@
 "use client";
 
-import { SessionProvider } from "next-auth/react";
 import AppShell from "./AppShell";
+import { AuthProvider } from "@/lib/auth-context";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SessionProvider>
+    <AuthProvider>
       <AppShell>{children}</AppShell>
-    </SessionProvider>
+    </AuthProvider>
   );
 }

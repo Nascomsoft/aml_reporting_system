@@ -1,9 +1,10 @@
 "use client";
 
-import { useSession, signOut } from "next-auth/react";
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components";
+import { useAuth } from "@/lib/auth-context";
 
 interface NavSection {
   title: string;
@@ -39,29 +40,35 @@ const navSections: NavSection[] = [
   },
 ];
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: string;
-}
-
 function getNormalizePath(pathname: string): string {
   return pathname.split("?")[0].split("#")[0];
 }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const { data: session } = useSession();
+  const { user, isLoading, logout } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const normalizedPath = getNormalizePath(pathname);
+  const isPublicRoute = pathname === "/login" || pathname === "/sign-up";
 
-  // Don't render shell on login page
-  if (pathname === "/login") {
+  useEffect(() => {
+    if (!isPublicRoute && !isLoading && !user) {
+      router.replace("/login");
+    }
+  }, [isLoading, isPublicRoute, router, user]);
+
+  // Don't render shell on public auth pages
+  if (isPublicRoute) {
     return <>{children}</>;
   }
 
-  const user = session?.user as
-    | { name?: string; email?: string; role?: string }
-    | undefined;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg-primary text-text-secondary">
+        Loading secure session...
+      </div>
+    );
+  }
 
   // Get breadcrumbs from current path
   const getBreadcrumbs = (): Array<{ label: string; href: string }> => {
@@ -90,13 +97,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-bg-primary">
       {/* Sidebar */}
       <aside
-        className="w-60 bg-bg-sidebar border-r border-border-default flex flex-col justify-between flex-shrink-0"
+        className="w-60 bg-bg-sidebar border-r border-border-default flex flex-col justify-between shrink-0"
         style={{ fontFamily: "var(--font-body)" }}
       >
         {/* Logo & Title */}
         <div className="p-6">
           <Link href="/" className="flex items-center gap-3 mb-8 hover:opacity-80 transition-opacity">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-600 to-primary-700 flex items-center justify-center text-white font-bold text-lg">
+            <div className="w-10 h-10 rounded-lg bg-linear-to-br from-primary-600 to-primary-700 flex items-center justify-center text-white font-bold text-lg">
               ⚖️
             </div>
             <div>
@@ -126,7 +133,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                           }
                         `}
                       >
-                        <span className="text-lg flex-shrink-0">{item.icon}</span>
+                        <span className="text-lg shrink-0">{item.icon}</span>
                         <span className="text-sm">{item.label}</span>
                         {isActive(item.href) && (
                           <span className="ml-auto w-2 h-2 bg-white rounded-full"></span>
@@ -153,7 +160,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </div>
             <Button
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={() => {
+                logout();
+                router.replace("/login");
+              }}
               variant="danger"
               fullWidth
               size="sm"

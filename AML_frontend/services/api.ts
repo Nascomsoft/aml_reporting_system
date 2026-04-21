@@ -7,10 +7,14 @@
 
 "use client";
 
+import { authFetch } from "@/lib/auth-client";
+
 // use same-origin API by default when running in browser; allows built-in Next.js API routes
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   (typeof window !== 'undefined' ? '/api' : 'http://localhost:3001/api');
+
+const fetch = authFetch;
 
 // ============================================================================
 // TYPE DEFINITIONS (Match these with your backend responses)

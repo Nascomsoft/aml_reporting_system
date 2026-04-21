@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { userSignupSchema } from "@/lib/validation";
 import { handleApiError } from "@/lib/errorHandler";
 import { toUserRole } from "@/lib/enumMaps";
+import { createAuthToken } from "@/lib/jwt";
 
 export async function POST(request: Request) {
   try {
@@ -35,7 +36,16 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ success: true, user }, { status: 201 });
+    const token = createAuthToken({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: String(user.role).toLowerCase(),
+      institutionId: null,
+      institutionName: null,
+    });
+
+    return NextResponse.json({ success: true, user, token }, { status: 201 });
   } catch (error) {
     return handleApiError(error);
   }

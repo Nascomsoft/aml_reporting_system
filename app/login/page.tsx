@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button, FormInput, AlertBanner } from "@/components";
+import { useAuth } from "@/lib/auth-context";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { user, isLoading, login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -16,12 +16,12 @@ export default function LoginPage() {
 
   // If already logged in, redirect to dashboard
   React.useEffect(() => {
-    if (status === "authenticated" && session?.user) {
+    if (!isLoading && user) {
       console.log("[LOGIN] User already authenticated, redirecting to dashboard");
       router.push("/");
       router.refresh();
     }
-  }, [status, session, router]);
+  }, [isLoading, router, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,58 +36,47 @@ export default function LoginPage() {
     console.log(`[${timestamp}] [LOGIN] Form submission started for email: ${maskedEmail}`);
 
     try {
-      console.log(`[${timestamp}] [LOGIN] Calling signIn("credentials") for: ${maskedEmail}`);
-      
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
+      console.log(`[${timestamp}] [LOGIN] Calling /api/auth/login for: ${maskedEmail}`);
+
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
 
       const elapsed = Date.now() - startTime;
-      console.log(`[${timestamp}] [LOGIN] signIn() completed in ${elapsed}ms. Result:`, result);
+      console.log(`[${timestamp}] [LOGIN] login request completed in ${elapsed}ms. Status: ${response.status}`);
 
-      if (result?.error) {
-        const errorMsg = result.error || "Unknown error";
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const errorMsg = result?.error || "Unknown error";
         console.error(`[${timestamp}] [LOGIN] FAILED: Authentication returned error: ${errorMsg}`, {
-          error: result.error,
-          status: result.status,
-          ok: result.ok,
-          errorCode: result.status,
+          error: result?.error,
+          status: response.status,
+          ok: response.ok,
+          errorCode: response.status,
         });
-        
-        // Show more specific error messages based on result code
-        if (result.status === 401) {
+
+        if (response.status === 401) {
           setError("Invalid email or password");
-        } else if (result.status === 500) {
+        } else if (response.status === 500) {
           setError("Server error during authentication. Please try again later.");
         } else {
           setError(errorMsg || "Invalid email or password");
         }
-      } else if (!result?.ok) {
-        console.error(`[${timestamp}] [LOGIN] FAILED: signIn returned but !ok`, { result });
-        setError("Authentication failed. Please try again.");
       } else {
-        console.log(`[${timestamp}] [LOGIN] SUCCESS: Authentication successful for: ${maskedEmail}`);
-        console.log(`[${timestamp}] [LOGIN] Session should be created. Waiting before redirect...`);
-        
-        // Wait for session cookie to be set before redirecting
-        // This is critical on Vercel serverless
-        for (let i = 0; i < 5; i++) {
-          await new Promise(resolve => setTimeout(resolve, 200));
-          
-          // Try to get updated session
-          // Don't actually check here, just wait and then redirect
-          console.log(`[${timestamp}] [LOGIN] Wait cycle ${i + 1}/5...`);
+        const token = result?.token as string | undefined;
+
+        if (!token || !login(token)) {
+          setError("Authentication succeeded but token handling failed.");
+          return;
         }
-        
+
+        console.log(`[${timestamp}] [LOGIN] SUCCESS: Authentication successful for: ${maskedEmail}`);
         console.log(`[${timestamp}] [LOGIN] Redirecting to home page...`);
         router.push("/");
-        
-        // Give navigation a moment to complete
-        await new Promise(resolve => setTimeout(resolve, 500));
         router.refresh();
-        
         console.log(`[${timestamp}] [LOGIN] Navigation completed`);
       }
     } catch (error) {
@@ -148,7 +137,7 @@ export default function LoginPage() {
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-3 mb-4">
             <div
-              className="w-16 h-16 rounded-lg flex items-center justify-center font-bold text-2xl flex-shrink-0"
+              className="w-16 h-16 rounded-lg flex items-center justify-center font-bold text-2xl shrink-0"
               style={{
                 background: "linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-700) 100%)",
                 color: "white",
@@ -189,7 +178,7 @@ export default function LoginPage() {
                     `}
                   >
                     <div className="flex items-start gap-3">
-                      <span className="text-2xl flex-shrink-0">{role.icon}</span>
+                      <span className="text-2xl shrink-0">{role.icon}</span>
                       <div>
                         <p className="font-semibold text-primary text-sm">
                           {role.label}
