@@ -126,6 +126,23 @@ export interface AdminMetricsResponse {
   totalAlerts: number;
 }
 
+export interface FinancialInstitutionRecord {
+  id: string;
+  name: string;
+  code: string;
+  status: "verified" | "suspended";
+  alertsThisMonth: number;
+  riskScore: number;
+  riskLevel: "low" | "medium" | "high" | "critical";
+  strSubmissions: number;
+  averageReviewTime: number;
+  complianceStatus: "compliant" | "warning" | "non_compliant";
+}
+
+export interface FinancialInstitutionsResponse {
+  financialInstitutions: FinancialInstitutionRecord[];
+}
+
 export interface STRComplianceResponse {
   summary: {
     totalSubmissions: number;
@@ -147,6 +164,31 @@ export interface STRComplianceResponse {
     APPROVED?: number;
     REJECTED?: number;
   }>;
+}
+
+export interface STRSubmissionRecord {
+  id: string;
+  transactionSummary: string;
+  customerName: string;
+  accountNumber: string;
+  descriptionOfSuspicion: string;
+  rulesTriggered: string[];
+  narrative: string;
+  riskClassification: "critical" | "high" | "medium" | "low";
+  status: "draft" | "submitted" | "under_review" | "closed";
+  caseNumber: string | null;
+  submittedBy: string;
+  submittingFinancialInstitution: string;
+  transactionAmount: number;
+  submittedDate: string | null;
+  createdAt: string;
+}
+
+export interface STRSubmissionsResponse {
+  submissions: STRSubmissionRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 // case management types
@@ -398,12 +440,41 @@ export const amlAPI = {
   },
 
   /**
+   * Fetch financial institutions for admin/regulator views
+   * GET /api/financial-institutions
+   */
+  getFinancialInstitutions: async (): Promise<FinancialInstitutionsResponse> => {
+    const response = await fetch(`${API_BASE_URL}/financial-institutions`);
+    if (!response.ok) throw new Error('Failed to fetch financial institutions');
+    return response.json();
+  },
+
+  /**
    * Fetch STR compliance analytics
    * GET /api/analytics/str-compliance
    */
   getSTRCompliance: async (): Promise<STRComplianceResponse> => {
     const response = await fetch(`${API_BASE_URL}/analytics/str-compliance`);
     if (!response.ok) throw new Error('Failed to fetch STR compliance');
+    return response.json();
+  },
+
+  /**
+   * Fetch STR submissions for regulator review
+   * GET /api/str?page=1&pageSize=20&status=submitted
+   */
+  getSTRSubmissions: async (
+    page: number = 1,
+    pageSize: number = 20,
+    status?: string
+  ): Promise<STRSubmissionsResponse> => {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      pageSize: pageSize.toString(),
+    });
+    if (status) params.set("status", status);
+    const response = await fetch(`${API_BASE_URL}/str?${params}`);
+    if (!response.ok) throw new Error("Failed to fetch STR submissions");
     return response.json();
   },
 
@@ -475,7 +546,7 @@ export interface TransactionsResponse {
 // CUSTOM HOOKS FOR DATA FETCHING
 // ============================================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef, type DependencyList } from 'react';
 
 interface UseAsyncState<T> {
   data: T | null;
@@ -489,17 +560,24 @@ interface UseAsyncState<T> {
 export function useAsync<T>(
   asyncFunction: () => Promise<T>,
   immediate = true,
+  deps: DependencyList = [],
 ): UseAsyncState<T> & { refetch: () => Promise<void> } {
+  const asyncFunctionRef = useRef(asyncFunction);
+  const depsKey = JSON.stringify(deps);
   const [state, setState] = useState<UseAsyncState<T>>({
     data: null,
     loading: immediate,
     error: null,
   });
 
-  const execute = async () => {
+  useEffect(() => {
+    asyncFunctionRef.current = asyncFunction;
+  }, [asyncFunction]);
+
+  const execute = useCallback(async () => {
     setState({ data: null, loading: true, error: null });
     try {
-      const response = await asyncFunction();
+      const response = await asyncFunctionRef.current();
       setState({ data: response, loading: false, error: null });
     } catch (error) {
       setState({
@@ -508,13 +586,17 @@ export function useAsync<T>(
         error: error instanceof Error ? error.message : 'An error occurred',
       });
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (immediate) {
-      execute();
-    }
-  }, [immediate]);
+    if (!immediate) return;
+
+    const timeoutId = setTimeout(() => {
+      void execute();
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
+  }, [immediate, execute, depsKey]);
 
   return {
     ...state,

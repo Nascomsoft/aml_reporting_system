@@ -50,6 +50,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const normalizedPath = getNormalizePath(pathname);
   const isPublicRoute = pathname === "/login" || pathname === "/sign-up";
+  const isAdmin = user?.role === "admin";
 
   useEffect(() => {
     if (!isPublicRoute && !isLoading && !user) {
@@ -114,7 +115,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Navigation Sections */}
           <nav className="space-y-6">
-            {navSections.map((section) => (
+            {navSections
+              .filter((section) => section.title !== "⚙️ Administration" || isAdmin)
+              .map((section) => (
               <div key={section.title}>
                 <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wide px-2 mb-3">
                   {section.title}
@@ -155,7 +158,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <p className="font-semibold text-primary text-sm mb-2">{user.name || "Officer"}</p>
               {user.role && (
                 <div className="inline-block px-2 py-1 bg-primary-100 rounded text-xs font-medium text-primary-900">
-                  {user.role}
+                  {user.role === "admin" ? "Administrator" : "Regulator"}
                 </div>
               )}
             </div>

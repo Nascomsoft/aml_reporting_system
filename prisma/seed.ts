@@ -25,22 +25,22 @@ async function main() {
   // ─── Create Institutions ─────────────────────────────────────────────
   const institutions = await Promise.all([
     prisma.institution.create({
-      data: { name: "Guaranty Trust Bank", code: "GTB", region: "Lagos", riskScore: 45, branchCount: 220 },
+      data: { name: "Harbor Crest Bank", code: "GTB", region: "Lagos", riskScore: 45, branchCount: 220 },
     }),
     prisma.institution.create({
-      data: { name: "Access Bank Nigeria", code: "ACCESS", region: "Lagos", riskScore: 62, branchCount: 650 },
+      data: { name: "Summit Gate Bank", code: "ACCESS", region: "Lagos", riskScore: 62, branchCount: 650 },
     }),
     prisma.institution.create({
-      data: { name: "Zenith Bank", code: "ZENITH", region: "South-West", riskScore: 78, branchCount: 480 },
+      data: { name: "Crown Meridian Bank", code: "ZENITH", region: "South-West", riskScore: 78, branchCount: 480 },
     }),
     prisma.institution.create({
-      data: { name: "First Bank Nigeria", code: "FIRSTBANK", region: "South-South", riskScore: 55, branchCount: 720 },
+      data: { name: "Heritage Union Bank", code: "FIRSTBANK", region: "South-South", riskScore: 55, branchCount: 720 },
     }),
     prisma.institution.create({
-      data: { name: "Sterling Bank", code: "STERLING", region: "North-Central", riskScore: 88, branchCount: 420 },
+      data: { name: "Silver Maple Bank", code: "STERLING", region: "North-Central", riskScore: 88, branchCount: 420 },
     }),
     prisma.institution.create({
-      data: { name: "United Bank for Africa", code: "UBA", region: "North-East", riskScore: 41, branchCount: 580 },
+      data: { name: "Continental Trust Bank", code: "UBA", region: "North-East", riskScore: 41, branchCount: 580 },
     }),
   ]);
   console.log(`  Created ${institutions.length} institutions`);
@@ -59,19 +59,19 @@ async function main() {
     }),
     prisma.user.create({
       data: {
-        email: "officer@access.com.ng",
+        email: "officer@summitgate.com.ng",
         name: "Chioma Okonkwo",
         password: hashedPw,
-        role: "COMPLIANCE_OFFICER",
+        role: "REGULATOR",
         institutionId: institutions[1].id,
       },
     }),
     prisma.user.create({
       data: {
-        email: "officer@zenith.com.ng",
+        email: "officer@crownmeridian.com.ng",
         name: "Aisha Musa",
         password: hashedPw,
-        role: "COMPLIANCE_OFFICER",
+        role: "REGULATOR",
         institutionId: institutions[2].id,
       },
     }),
@@ -86,10 +86,10 @@ async function main() {
     }),
     prisma.user.create({
       data: {
-        email: "officer@firstbank.com.ng",
+        email: "officer@heritageunion.com.ng",
         name: "Tunde Olusegun",
         password: hashedPw,
-        role: "COMPLIANCE_OFFICER",
+        role: "REGULATOR",
         institutionId: institutions[3].id,
       },
     }),
@@ -424,10 +424,10 @@ async function main() {
   console.log("\n✅ Database seeded successfully!");
   console.log("\n📋 Login credentials:");
   console.log("  Admin:      admin@aml.gov.ng / password123");
-  console.log("  Officer:    officer@access.com.ng / password123");
-  console.log("  Officer 2:  officer@zenith.com.ng / password123");
+  console.log("  Officer:    officer@summitgate.com.ng / password123");
+  console.log("  Officer 2:  officer@crownmeridian.com.ng / password123");
   console.log("  Regulator:  regulator@cbn.gov.ng / password123");
-  console.log("  Officer 3:  officer@firstbank.com.ng / password123");
+  console.log("  Officer 3:  officer@heritageunion.com.ng / password123");
 }
 
 main()

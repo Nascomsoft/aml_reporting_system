@@ -125,22 +125,20 @@ export function toTxType(s: string): TransactionType {
 
 const roleMap: Record<string, UserRole> = {
   admin: UserRole.ADMIN,
-  compliance_officer: UserRole.COMPLIANCE_OFFICER,
   regulator: UserRole.REGULATOR,
 };
 
 const roleReverseMap: Record<UserRole, string> = {
   [UserRole.ADMIN]: "admin",
-  [UserRole.COMPLIANCE_OFFICER]: "compliance_officer",
   [UserRole.REGULATOR]: "regulator",
 };
 
 export function toUserRole(s: string): UserRole {
-  return roleMap[s.toLowerCase()] ?? UserRole.COMPLIANCE_OFFICER;
+  return roleMap[s.toLowerCase()] ?? UserRole.REGULATOR;
 }
 
 export function fromUserRole(s: UserRole): string {
-  return roleReverseMap[s] ?? "compliance_officer";
+  return roleReverseMap[s] ?? "regulator";
 }
 
 // ─── STR status mapping ─────────────────────────────────────────────────────

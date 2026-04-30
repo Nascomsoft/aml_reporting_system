@@ -5,7 +5,7 @@
 
 import React from 'react';
 
-export type UserRole = 'bank_officer' | 'admin' | 'regulator';
+export type UserRole = 'admin' | 'regulator';
 
 export interface RoleBasedLayoutProps {
   userRole: UserRole;
@@ -20,12 +20,6 @@ const roleConfig: Record<UserRole, {
   icon: string;
   description: string;
 }> = {
-  bank_officer: {
-    label: 'Bank Officer',
-    color: '#0284c7',
-    icon: '🏦',
-    description: 'Compliance and Investigation',
-  },
   admin: {
     label: 'System Admin',
     color: '#8b5cf6',

@@ -8,13 +8,8 @@ export async function GET() {
     await requireRole("regulator");
 
     // Get STR submission metrics
-    const [
-      totalSubmissions,
-      draftCount,
-      submittedCount,
-      underReviewCount,
-      closedCount,
-    ] = await Promise.all([
+    const [totalSubmissions, draftCount, submittedCount, underReviewCount, closedCount] =
+      await Promise.all([
       prisma.sTRSubmission.count(),
       prisma.sTRSubmission.count({ where: { status: "DRAFT" } }),
       prisma.sTRSubmission.count({ where: { status: "SUBMITTED" } }),
@@ -52,12 +47,20 @@ export async function GET() {
     for (const sub of recentSubmissions) {
       const dateKey = sub.createdAt.toISOString().split("T")[0];
       const dayData = submissionsByDay.get(dateKey) ?? {
-        DRAFT: 0,
+        PENDING: 0,
         SUBMITTED: 0,
-        UNDER_REVIEW: 0,
-        CLOSED: 0,
+        APPROVED: 0,
+        REJECTED: 0,
       };
-      dayData[sub.status] = (dayData[sub.status] ?? 0) + 1;
+
+      if (sub.status === "CLOSED") {
+        dayData.APPROVED += 1;
+      } else if (sub.status === "UNDER_REVIEW") {
+        dayData.SUBMITTED += 1;
+      } else if (sub.status === "SUBMITTED" || sub.status === "DRAFT") {
+        dayData.PENDING += 1;
+      }
+
       submissionsByDay.set(dateKey, dayData);
     }
 
@@ -77,10 +80,10 @@ export async function GET() {
     return NextResponse.json({
       summary: {
         totalSubmissions,
-        draft: draftCount,
         submitted: submittedCount,
-        underReview: underReviewCount,
-        closed: closedCount,
+        pending: draftCount + submittedCount,
+        approved: closedCount,
+        rejected: 0,
         complianceRate: `${complianceRate}%`,
       },
       institutionStats: institutionStats.map((inst) => ({

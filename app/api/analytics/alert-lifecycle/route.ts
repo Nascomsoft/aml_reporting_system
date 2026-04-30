@@ -8,7 +8,7 @@ export async function GET() {
     const user = await requireAuth();
     
     // Build where clause based on role
-    const whereClause = user.role === "compliance_officer" && user.institutionId
+    const whereClause = user.role === "regulator" && user.institutionId
       ? { institutionId: user.institutionId }
       : {};
 

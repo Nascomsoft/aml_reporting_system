@@ -30,22 +30,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: ClientAuthPayload | null;
     token: string | null;
     isLoading: boolean;
-  }>(() => {
-    const storedToken = readAuthToken();
-
-    if (!storedToken) {
-      return { user: null, token: null, isLoading: false };
-    }
-
-    const decoded = decodeClientAuthToken(storedToken);
-
-    if (!decoded || decoded.exp <= Math.floor(Date.now() / 1000)) {
-      clearAuthToken();
-      return { user: null, token: null, isLoading: false };
-    }
-
-    return { user: decoded, token: storedToken, isLoading: false };
+  }>({
+    user: null,
+    token: null,
+    isLoading: true,
   });
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      const storedToken = readAuthToken();
+
+      if (!storedToken) {
+        setAuthState({ user: null, token: null, isLoading: false });
+        return;
+      }
+
+      const decoded = decodeClientAuthToken(storedToken);
+
+      if (!decoded || decoded.exp <= Math.floor(Date.now() / 1000)) {
+        clearAuthToken();
+        setAuthState({ user: null, token: null, isLoading: false });
+        return;
+      }
+
+      setAuthState({ user: decoded, token: storedToken, isLoading: false });
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   useEffect(() => {
     function handleStorage(event: StorageEvent) {

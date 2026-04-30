@@ -88,7 +88,7 @@ export const userSignupSchema = z.object({
   email: z.email(),
   name: z.string().min(2),
   password: z.string().min(8, "Password must be at least 8 characters"),
-  role: z.enum(["admin", "compliance_officer", "regulator"]).default("compliance_officer"),
+  role: z.enum(["admin", "regulator"]).default("regulator"),
   institutionId: z.string().optional(),
 });
 

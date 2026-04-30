@@ -9,7 +9,7 @@ export async function GET() {
     
     // Officers see only their institution; admin/regulator see all
     let institutions;
-    if (user.role === "compliance_officer" && user.institutionId) {
+    if (user.role === "regulator" && user.institutionId) {
       institutions = await prisma.institution.findMany({
         where: { isActive: true, id: user.institutionId },
         select: { region: true, riskScore: true },

@@ -5,8 +5,22 @@ import { requireRole } from "@/lib/session";
 
 export async function GET() {
   try {
-    const user = await requireRole("compliance_officer");
-    // Filter data for the officer's institution
+    const user = await requireRole("admin", "regulator");
+    const caseWhere =
+      user.role === "regulator" && user.institutionId
+        ? {
+            status: "UNDER_REVIEW" as const,
+            linkedAlerts: {
+              some: {
+                institutionId: user.institutionId,
+              },
+            },
+          }
+        : {
+            status: "UNDER_REVIEW" as const,
+          };
+
+    // Filter data for the non-admin user's institution when available
     const [
       totalBranches,
       attentionInstitutions,
@@ -14,29 +28,21 @@ export async function GET() {
       casesPendingEscalation,
     ] = await Promise.all([
       prisma.institution.aggregate({
-        where: user.institutionId ? { id: user.institutionId } : {},
+        where: user.role === "regulator" && user.institutionId ? { id: user.institutionId } : {},
         _sum: { branchCount: true },
       }),
       prisma.institution.count({
         where: {
-          ...(user.institutionId ? { id: user.institutionId } : {}),
+          ...(user.role === "regulator" && user.institutionId ? { id: user.institutionId } : {}),
           riskScore: { gte: 70 },
         },
       }),
       prisma.case.count({
-        where: {
-          ...(user.institutionId
-            ? { caseInstitutionId: user.institutionId }
-            : {}),
-          status: "UNDER_REVIEW",
-        },
+        where: caseWhere,
       }),
       prisma.case.count({
         where: {
-          ...(user.institutionId
-            ? { caseInstitutionId: user.institutionId }
-            : {}),
-          status: "UNDER_REVIEW",
+          ...caseWhere,
           slaRemainingHours: { lte: 8 },
         },
       }),

@@ -105,16 +105,16 @@ export function getNigerianTimezone(): { offset: number; name: string } {
  * Common Nigerian institution names and codes
  */
 export const NIGERIAN_INSTITUTIONS = [
-  { code: 'GTB', name: 'Guaranty Trust Bank (GTB)' },
-  { code: 'ACCESS', name: 'Access Bank Plc' },
-  { code: 'ZENITH', name: 'Zenith Bank Plc' },
-  { code: 'FIRST', name: 'First Bank of Nigeria' },
-  { code: 'DIAMOND', name: 'Diamond Bank' },
-  { code: 'UNION', name: 'Union Bank of Nigeria' },
-  { code: 'STANBIC', name: 'Stanbic IBTC' },
-  { code: 'FCMB', name: 'FCMB Group' },
-  { code: 'UBA', name: 'United Bank for Africa (UBA)' },
-  { code: 'WEMA', name: 'Wema Bank' },
+  { code: 'GTB', name: 'Harbor Crest Bank (GTB)' },
+  { code: 'ACCESS', name: 'Summit Gate Bank' },
+  { code: 'ZENITH', name: 'Crown Meridian Bank' },
+  { code: 'FIRST', name: 'Heritage Union Bank' },
+  { code: 'DIAMOND', name: 'Diamond Ridge Bank' },
+  { code: 'UNION', name: 'Union Crest Bank' },
+  { code: 'STANBIC', name: 'Capital Spring Bank' },
+  { code: 'FCMB', name: 'First City Heritage Bank' },
+  { code: 'UBA', name: 'Continental Trust Bank (UBA)' },
+  { code: 'WEMA', name: 'Wema Crest Bank' },
 ];
 
 /**

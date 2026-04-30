@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertResponse,
   amlAPI,
@@ -13,9 +14,8 @@ import {
   Select,
   Table,
   Modal,
-  AlertBanner,
 } from "@/components";
-import { formatNGN, formatDateNG, formatDateTimeNG } from "@/lib/localization";
+import { formatNGN } from "@/lib/localization";
 
 // augmentation of alert type for management UI
 interface ManagedAlert extends AlertResponse {
@@ -29,6 +29,14 @@ interface ManagedAlert extends AlertResponse {
   institution?: string;
 }
 
+interface AlertApiRecord extends AlertResponse {
+  customerName?: string;
+  riskScore?: number;
+  amount?: number;
+  ruleTriggered?: string;
+  lifecycleStage?: "new" | "underReview" | "escalated" | "closed";
+}
+
 interface FilterState {
   dateFrom: string;
   dateTo: string;
@@ -40,7 +48,47 @@ interface FilterState {
   amountMax: string;
 }
 
+const EMPTY_FILTERS: FilterState = {
+  dateFrom: "",
+  dateTo: "",
+  riskLevel: "",
+  lifecycleStage: "",
+  detectionSource: "",
+  institution: "",
+  amountMin: "",
+  amountMax: "",
+};
+
+function getFiltersFromSearchParams(searchParams: URLSearchParams | ReadonlyURLSearchParams): FilterState {
+  return {
+    dateFrom: searchParams.get("dateFrom") ?? "",
+    dateTo: searchParams.get("dateTo") ?? "",
+    riskLevel: searchParams.get("riskLevel") ?? "",
+    lifecycleStage: searchParams.get("lifecycleStage") ?? "",
+    detectionSource: searchParams.get("detectionSource") ?? "",
+    institution: searchParams.get("institution") ?? "",
+    amountMin: searchParams.get("amountMin") ?? "",
+    amountMax: searchParams.get("amountMax") ?? "",
+  };
+}
+
+function filtersAreEqual(left: FilterState, right: FilterState): boolean {
+  return (
+    left.dateFrom === right.dateFrom &&
+    left.dateTo === right.dateTo &&
+    left.riskLevel === right.riskLevel &&
+    left.lifecycleStage === right.lifecycleStage &&
+    left.detectionSource === right.detectionSource &&
+    left.institution === right.institution &&
+    left.amountMin === right.amountMin &&
+    left.amountMax === right.amountMax
+  );
+}
+
 export default function AlertManagement() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [alerts, setAlerts] = useState<ManagedAlert[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -50,16 +98,9 @@ export default function AlertManagement() {
   const [transitionNotes, setTransitionNotes] = useState("");
   const [isLargeScreen, setIsLargeScreen] = useState(true);
 
-  const [filters, setFilters] = useState<FilterState>({
-    dateFrom: "",
-    dateTo: "",
-    riskLevel: "",
-    lifecycleStage: "",
-    detectionSource: "",
-    institution: "",
-    amountMin: "",
-    amountMax: "",
-  });
+  const [filters, setFilters] = useState<FilterState>(() =>
+    getFiltersFromSearchParams(searchParams)
+  );
 
   // Handle responsive screen size
   React.useEffect(() => {
@@ -72,6 +113,35 @@ export default function AlertManagement() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  React.useEffect(() => {
+    const nextFilters = getFiltersFromSearchParams(searchParams);
+    setFilters((currentFilters) =>
+      filtersAreEqual(currentFilters, nextFilters) ? currentFilters : nextFilters
+    );
+  }, [searchParams]);
+
+  React.useEffect(() => {
+    const params = new URLSearchParams();
+
+    if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
+    if (filters.dateTo) params.set("dateTo", filters.dateTo);
+    if (filters.riskLevel) params.set("riskLevel", filters.riskLevel);
+    if (filters.lifecycleStage) params.set("lifecycleStage", filters.lifecycleStage);
+    if (filters.detectionSource) params.set("detectionSource", filters.detectionSource);
+    if (filters.institution) params.set("institution", filters.institution);
+    if (filters.amountMin) params.set("amountMin", filters.amountMin);
+    if (filters.amountMax) params.set("amountMax", filters.amountMax);
+
+    const nextQuery = params.toString();
+    const currentQuery = searchParams.toString();
+
+    if (nextQuery === currentQuery) {
+      return;
+    }
+
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [filters, pathname, router, searchParams]);
 
   // Fetch alerts whenever filters change
   React.useEffect(() => {
@@ -88,16 +158,19 @@ export default function AlertManagement() {
           amountMin: filters.amountMin,
           amountMax: filters.amountMax,
         });
-        const mapped: ManagedAlert[] = resp.alerts.map((a): ManagedAlert => ({
+        const mapped: ManagedAlert[] = resp.alerts.map((alert): ManagedAlert => {
+          const a = alert as AlertApiRecord;
+          return ({
           ...a,
-          customerName: (a as any).customerName || a.institution || "--",
-          riskScore: (a as any).riskScore ?? (a.severity === 'critical' ? 90 : a.severity === 'high' ? 70 : a.severity === 'medium' ? 50 : 20),
-          amount: (a as any).amount ?? 0,
-          ruleTriggered: (a as any).ruleTriggered || "N/A",
+          customerName: a.customerName || a.institution || "--",
+          riskScore: a.riskScore ?? (a.severity === 'critical' ? 90 : a.severity === 'high' ? 70 : a.severity === 'medium' ? 50 : 20),
+          amount: a.amount ?? 0,
+          ruleTriggered: a.ruleTriggered || "N/A",
           detectionSource: a.detectionType as "edge" | "core",
-          lifecycleStage: (a as any).lifecycleStage || 'new',
+          lifecycleStage: a.lifecycleStage || 'new',
           slaRemainingHours: a.slsRemaining,
-        }));
+          });
+        });
         setAlerts(mapped);
       } catch (err) {
         console.error(err);
@@ -113,16 +186,7 @@ export default function AlertManagement() {
   };
 
   const clearFilters = () => {
-    setFilters({
-      dateFrom: "",
-      dateTo: "",
-      riskLevel: "",
-      lifecycleStage: "",
-      detectionSource: "",
-      institution: "",
-      amountMin: "",
-      amountMax: "",
-    });
+    setFilters(EMPTY_FILTERS);
   };
 
   const requestTransition = (alert: ManagedAlert, targetStage: string) => {
@@ -136,7 +200,7 @@ export default function AlertManagement() {
     if (selectedAlert) {
       try {
         await amlAPI.updateAlertLifecycle(selectedAlert.id, pendingTransition);
-        selectedAlert.lifecycleStage = pendingTransition as any;
+                        selectedAlert.lifecycleStage = pendingTransition as ManagedAlert["lifecycleStage"];
         setAlerts([...alerts]);
       } catch (err) {
         console.error("failed to update alert", err);
@@ -293,7 +357,7 @@ export default function AlertManagement() {
 
                 {/* Filter by Institution */}
                 <FormInput
-                  label="Institution"
+                  label="Financial Institution"
                   value={filters.institution}
                   onChange={(e) => updateFilter("institution", e.target.value)}
                   placeholder="Bank name"
@@ -422,7 +486,7 @@ export default function AlertManagement() {
                     key: "lifecycleStage",
                     header: "Status",
                     width: "12%",
-                    render: (value, row) => (
+                    render: (value) => (
                       <Badge variant={getLifecycleColor(value as string)}>
                         {String(value).replace(/([A-Z])/g, " $1")}
                       </Badge>

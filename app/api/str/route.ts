@@ -28,7 +28,17 @@ export async function GET(request: Request) {
       prisma.sTRSubmission.findMany({
         where,
         include: {
-          submittedBy: { select: { name: true, email: true } },
+          submittedBy: {
+            select: {
+              name: true,
+              email: true,
+              institution: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
           case: { select: { caseNumber: true } },
         },
         orderBy: { createdAt: "desc" },
@@ -37,6 +47,29 @@ export async function GET(request: Request) {
       }),
       prisma.sTRSubmission.count({ where }),
     ]);
+
+    const transactionIds = Array.from(
+      new Set(submissions.flatMap((submission) => submission.transactionIds))
+    );
+
+    const linkedTransactions =
+      transactionIds.length > 0
+        ? await prisma.transaction.findMany({
+            where: {
+              id: {
+                in: transactionIds,
+              },
+            },
+            select: {
+              id: true,
+              amount: true,
+            },
+          })
+        : [];
+
+    const transactionAmounts = new Map(
+      linkedTransactions.map((transaction) => [transaction.id, transaction.amount])
+    );
 
     return NextResponse.json({
       submissions: submissions.map((s) => ({
@@ -51,6 +84,12 @@ export async function GET(request: Request) {
         status: fromSTRStatus(s.status),
         caseNumber: s.case?.caseNumber ?? null,
         submittedBy: s.submittedBy?.name ?? "",
+        submittingFinancialInstitution:
+          s.submittedBy?.institution?.name ?? "Unassigned Financial Institution",
+        transactionAmount: s.transactionIds.reduce(
+          (sum, transactionId) => sum + (transactionAmounts.get(transactionId) ?? 0),
+          0
+        ),
         submittedDate: s.submittedDate?.toISOString() ?? null,
         createdAt: s.createdAt.toISOString(),
       })),

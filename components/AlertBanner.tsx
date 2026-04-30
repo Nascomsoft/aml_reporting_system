@@ -89,7 +89,7 @@ export const AlertBanner = React.forwardRef<
           {action && (
             <button
               onClick={action.onClick}
-              className="text-sm font-medium underline hover:no-underline"
+              className="text-sm font-medium underline hover:no-underline cursor-pointer"
             >
               {action.label}
             </button>

@@ -17,8 +17,8 @@ export async function GET(request: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const whereClause: any = {};
 
-    // Officers only see transactions from their institution
-    if (user.role === "compliance_officer" && user.institutionId) {
+    // Non-admin users only see transactions from their institution
+    if (user.role !== "admin" && user.institutionId) {
       whereClause.institutionId = user.institutionId;
     }
 

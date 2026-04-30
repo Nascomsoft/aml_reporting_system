@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, FormInput, AlertBanner } from "@/components";
 import { useAuth } from "@/lib/auth-context";
@@ -12,14 +12,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [selectedRole, setSelectedRole] = useState("bank_officer");
 
   // If already logged in, redirect to dashboard
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isLoading && user) {
       console.log("[LOGIN] User already authenticated, redirecting to dashboard");
-      router.push("/");
-      router.refresh();
+      router.replace("/");
     }
   }, [isLoading, router, user]);
 
@@ -75,9 +73,6 @@ export default function LoginPage() {
 
         console.log(`[${timestamp}] [LOGIN] SUCCESS: Authentication successful for: ${maskedEmail}`);
         console.log(`[${timestamp}] [LOGIN] Redirecting to home page...`);
-        router.push("/");
-        router.refresh();
-        console.log(`[${timestamp}] [LOGIN] Navigation completed`);
       }
     } catch (error) {
       const elapsed = Date.now() - startTime;
@@ -102,27 +97,6 @@ export default function LoginPage() {
       console.log(`[${timestamp}] [LOGIN] Form submission completed in ${totalTime}ms`);
     }
   };
-
-  const roleOptions = [
-    {
-      id: "bank_officer",
-      label: "Bank Compliance Officer",
-      icon: "🏦",
-      description: "Alert monitoring & case investigation",
-    },
-    {
-      id: "admin",
-      label: "System Administrator",
-      icon: "⚙️",
-      description: "System configuration & management",
-    },
-    {
-      id: "regulator",
-      label: "Regulatory Authority",
-      icon: "📋",
-      description: "STR submissions & monitoring",
-    },
-  ];
 
   return (
     <div
@@ -159,37 +133,19 @@ export default function LoginPage() {
 
         {/* Main Form Container */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* Role Selection Sidebar */}
+          {/* Access Notes */}
           <div className="lg:col-span-2">
             <div className="card">
-              <h6 className="heading-6 text-primary mb-4">Select Your Role</h6>
-              <div className="flex flex-col gap-3">
-                {roleOptions.map((role) => (
-                  <button
-                    key={role.id}
-                    onClick={() => setSelectedRole(role.id)}
-                    className={`
-                      p-4 rounded-lg text-left transition-all
-                      ${
-                        selectedRole === role.id
-                          ? "bg-primary-600 bg-opacity-20 border border-primary-600"
-                          : "bg-bg-tertiary border border-border-default hover:border-primary-600 hover:bg-opacity-50"
-                      }
-                    `}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl shrink-0">{role.icon}</span>
-                      <div>
-                        <p className="font-semibold text-primary text-sm">
-                          {role.label}
-                        </p>
-                        <p className="text-xs text-text-secondary mt-1">
-                          {role.description}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
+              <h6 className="heading-6 text-primary mb-4">Access Levels</h6>
+              <div className="space-y-3 text-sm text-text-secondary">
+                <div className="p-4 rounded-lg bg-bg-tertiary border border-border-default">
+                  <p className="font-semibold text-primary mb-1">Admin</p>
+                  <p>Full system access, including administration and management tools.</p>
+                </div>
+                <div className="p-4 rounded-lg bg-bg-tertiary border border-border-default">
+                  <p className="font-semibold text-primary mb-1">Regulator</p>
+                  <p>Monitoring and reporting access without administration controls.</p>
+                </div>
               </div>
 
               {/* Info Box */}
@@ -200,12 +156,17 @@ export default function LoginPage() {
                 <div className="space-y-2 text-xs text-text-secondary">
                   <p>
                     <span className="font-mono bg-bg-secondary px-2 py-1 rounded">
-                      officer@bank.com
+                      admin@aml.gov.ng
                     </span>
                   </p>
                   <p>
                     <span className="font-mono bg-bg-secondary px-2 py-1 rounded">
                       password
+                    </span>
+                  </p>
+                  <p>
+                    <span className="font-mono bg-bg-secondary px-2 py-1 rounded">
+                      regulator@cbn.gov.ng
                     </span>
                   </p>
                 </div>
@@ -233,7 +194,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="officer@bank.com"
+                  placeholder="admin@aml.gov.ng"
                   required
                   disabled={loading}
                   helperText="Enter your institutional email"

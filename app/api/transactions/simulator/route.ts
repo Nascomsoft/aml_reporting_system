@@ -26,11 +26,8 @@ export async function POST(request: Request) {
   try {
     const user = await requireAuth();
 
-    // Only allow admins and compliance officers to control simulations
-    if (
-      user.role !== "admin" &&
-      user.role !== "COMPLIANCE_OFFICER"
-    ) {
+    // Only admins can control simulations
+    if (user.role !== "admin") {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 403 }
@@ -69,18 +66,15 @@ export async function GET(request: Request) {
     const user = await requireAuth();
 
     // Only allow admins and regulators to view real-time stream
-    if (user.role !== "admin" && user.role !== "REGULATOR") {
-      // Compliance officers can view for their institution
-      if (user.role !== "COMPLIANCE_OFFICER" || !user.institutionId) {
-        return NextResponse.json(
-          { error: "Unauthorized" },
-          { status: 403 }
-        );
-      }
+    if (user.role !== "admin" && (user.role !== "regulator" || !user.institutionId)) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 403 }
+      );
     }
 
     // Determine which institution to stream for
-    const institutionId = user.institutionId;
+    const institutionId = user.role === "admin" ? null : user.institutionId;
 
     // Create SSE response
     const encoder = new TextEncoder();

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   Card,
   Badge,
@@ -13,7 +13,12 @@ import {
   KPICard,
 } from "@/components";
 import { formatDateTimeNG, formatNumberShort } from "@/lib/localization";
-import { amlAPI, useAsync, AdminMetricsResponse } from "@/AML_frontend/services/api";
+import {
+  amlAPI,
+  useAsync,
+  AdminMetricsResponse,
+  FinancialInstitutionsResponse,
+} from "@/AML_frontend/services/api";
 
 // Types
 interface AMLRule {
@@ -30,7 +35,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: "bank_officer" | "admin" | "regulator";
+  role: "admin" | "regulator";
   status: "active" | "inactive";
   createdDate: string;
   lastLogin: string;
@@ -40,8 +45,7 @@ interface Institution {
   id: string;
   name: string;
   code: string;
-  cbncodes: string; // CBN institution code
-  status: "verified" | "pending" | "suspended";
+  status: "verified" | "suspended";
   alertsThisMonth: number;
   riskLevel: "low" | "medium" | "high" | "critical";
 }
@@ -62,6 +66,9 @@ export default function AdminPage() {
 
   // Fetch admin metrics
   const adminMetrics = useAsync<AdminMetricsResponse>(() => amlAPI.getAdminMetrics());
+  const financialInstitutions = useAsync<FinancialInstitutionsResponse>(() =>
+    amlAPI.getFinancialInstitutions()
+  );
 
   // Rules Management
   const [rules, setRules] = useState<AMLRule[]>([
@@ -99,7 +106,7 @@ export default function AdminPage() {
       id: "USER-001",
       name: "Chioma Okonkwo",
       email: "chioma.okonkwo@bank.ng",
-      role: "bank_officer",
+      role: "regulator",
       status: "active",
       createdDate: "2025-12-01",
       lastLogin: "2026-03-27",
@@ -121,36 +128,6 @@ export default function AdminPage() {
       status: "active",
       createdDate: "2026-01-01",
       lastLogin: "2026-03-26",
-    },
-  ]);
-
-  const [institutions, setInstitutions] = useState<Institution[]>([
-    {
-      id: "INST-001",
-      name: "Guaranty Trust Bank",
-      code: "GTB",
-      cbncodes: "058",
-      status: "verified",
-      alertsThisMonth: 45,
-      riskLevel: "low",
-    },
-    {
-      id: "INST-002",
-      name: "Access Bank Nigeria",
-      code: "ACCESS",
-      cbncodes: "044",
-      status: "verified",
-      alertsThisMonth: 32,
-      riskLevel: "low",
-    },
-    {
-      id: "INST-003",
-      name: "Zenith Bank",
-      code: "ZENITH",
-      cbncodes: "057",
-      status: "verified",
-      alertsThisMonth: 78,
-      riskLevel: "medium",
     },
   ]);
 
@@ -195,8 +172,22 @@ export default function AdminPage() {
   const [newUser, setNewUser] = useState({
     name: "",
     email: "",
-    role: "bank_officer",
+    role: "regulator",
   });
+
+  const institutionRows: Institution[] =
+    financialInstitutions.data?.financialInstitutions.map((financialInstitution) => ({
+      id: financialInstitution.id,
+      name: financialInstitution.name,
+      code: financialInstitution.code,
+      status: financialInstitution.status,
+      alertsThisMonth: financialInstitution.alertsThisMonth,
+      riskLevel: financialInstitution.riskLevel,
+    })) ?? [];
+
+  const verifiedFinancialInstitutions = institutionRows.filter(
+    (financialInstitution) => financialInstitution.status === "verified"
+  ).length;
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -257,7 +248,7 @@ export default function AdminPage() {
       <div>
         <h1 className="heading-2 text-primary m-0">Admin Dashboard</h1>
         <p className="text-text-secondary text-base mt-2">
-          System management, rules, users, and institution oversight
+          System management, rules, users, and financial institution oversight
         </p>
       </div>
 
@@ -311,7 +302,7 @@ export default function AdminPage() {
               : "text-text-secondary hover:text-primary"
           }`}
         >
-          🏦 Institutions
+          🏦 Financial Institutions
         </button>
       </div>
 
@@ -357,13 +348,13 @@ export default function AdminPage() {
           {adminMetrics.data && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Card>
-                <h3 className="heading-4 text-primary m-0 mb-4">Monitored Institutions</h3>
+                <h3 className="heading-4 text-primary m-0 mb-4">Monitored Financial Institutions</h3>
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-text-secondary">Total</span>
                     <span className="heading-3 text-primary m-0">{adminMetrics.data.monitoredInstitutions}</span>
                   </div>
-                  <div className="text-sm text-text-secondary">Banks and financial institutions under monitoring</div>
+                  <div className="text-sm text-text-secondary">Financial institutions under monitoring</div>
                 </div>
               </Card>
 
@@ -443,10 +434,10 @@ export default function AdminPage() {
               onClick={() => setActiveTab("users")}
             />
             <KPICard
-              title="Institutions"
-              value={institutions.length}
+              title="Financial Institutions"
+              value={institutionRows.length}
               icon="🏦"
-              subtext="Verified: 3"
+              subtext={`Verified: ${verifiedFinancialInstitutions}`}
               onClick={() => setActiveTab("institutions")}
             />
             <KPICard
@@ -748,45 +739,50 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Institution Management Tab */}
+      {/* Financial Institution Management Tab */}
       {activeTab === "institutions" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="heading-3 text-primary m-0">
-              Institution Management
+              Financial Institution Management
             </h2>
             <Button
               variant="success"
               onClick={() => setShowNewInstitution(true)}
             >
-              🏦 Add Institution
+              🏦 Add Financial Institution
             </Button>
           </div>
 
           <Card>
+            {financialInstitutions.loading && (
+              <div className="text-text-secondary">Loading financial institutions...</div>
+            )}
+            {financialInstitutions.error && (
+              <AlertBanner
+                type="danger"
+                title="Error"
+                message={financialInstitutions.error}
+              />
+            )}
+            {!financialInstitutions.loading && !financialInstitutions.error && (
             <Table
               columns={[
                 {
                   key: "name",
-                  header: "Institution",
-                  width: "25%",
+                  header: "Financial Institution",
+                  width: "35%",
                 },
                 {
                   key: "code",
                   header: "Code",
-                  width: "12%",
-                  render: (value) => <code className="text-xs">{value}</code>,
-                },
-                {
-                  key: "cbncodes",
-                  header: "CBN Code",
-                  width: "12%",
+                  width: "15%",
                   render: (value) => <code className="text-xs">{value}</code>,
                 },
                 {
                   key: "status",
                   header: "Status",
-                  width: "15%",
+                  width: "16%",
                   render: (value) => (
                     <Badge variant={getStatusColor(value as string)}>
                       {(value as string).toUpperCase()}
@@ -796,7 +792,7 @@ export default function AdminPage() {
                 {
                   key: "riskLevel",
                   header: "Risk",
-                  width: "12%",
+                  width: "14%",
                   render: (value) => (
                     <Badge variant={getRiskColor(value as string)}>
                       {(value as string).toUpperCase()}
@@ -806,15 +802,16 @@ export default function AdminPage() {
                 {
                   key: "alertsThisMonth",
                   header: "Alerts (This Month)",
-                  width: "14%",
+                  width: "20%",
                   render: (value) => (
                     <span className="font-semibold">{value}</span>
                   ),
                 },
               ]}
-              data={institutions}
+              data={institutionRows}
               rowKey="id"
             />
+            )}
           </Card>
         </div>
       )}
@@ -848,11 +845,10 @@ export default function AdminPage() {
             variant={activeTab === "institutions" ? "primary" : "secondary"}
             onClick={() => setActiveTab("institutions")}
           >
-            🏦 Institutions
+            🏦 Financial Institutions
           </Button>
         </div>
       </Card>
     </div>
   );
 }
-

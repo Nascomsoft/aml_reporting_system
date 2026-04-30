@@ -1,4 +1,6 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This is an AML reporting and monitoring system built with [Next.js](https://nextjs.org).
+
+For a detailed explanation of how the system works, start with [docs/system-guide.md](docs/system-guide.md).
 
 ## Getting Started
 

@@ -16,7 +16,7 @@ model User {
   email          String    @unique
   name           String
   password       String // bcrypt hash
-  role           UserRole  @default(COMPLIANCE_OFFICER)
+  role           UserRole  @default(REGULATOR)
   institutionId  String?   @db.ObjectId
   institution    Institution? @relation(fields: [institutionId], references: [id])
   isActive       Boolean   @default(true)
@@ -37,7 +37,6 @@ model User {
 
 enum UserRole {
   ADMIN
-  COMPLIANCE_OFFICER
   REGULATOR
 }
 

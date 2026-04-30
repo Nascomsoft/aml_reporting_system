@@ -5,7 +5,6 @@ import {
   amlAPI,
   useAsync,
   AlertResponse,
-  KPIResponse,
   AlertsListResponse,
   RealTimeIndicatorsResponse,
   HeatmapDataResponse,
@@ -34,7 +33,6 @@ function riskColor(score: number): string {
 }
 
 export default function OfficerDashboard() {
-  const [lastUpdate, setLastUpdate] = useState<string>("");
   const [selectedTimeRange, setSelectedTimeRange] = useState<"24h" | "7d" | "30d">("24h");
 
   // Data fetching with proper role-based Auth
@@ -42,21 +40,21 @@ export default function OfficerDashboard() {
   const topAlerts = useAsync<AlertsListResponse>(() => amlAPI.getTopAlerts(5));
   const realtime = useAsync<RealTimeIndicatorsResponse>(() => amlAPI.getRealTimeIndicators());
   const heatmap = useAsync<HeatmapDataResponse>(() => amlAPI.getHeatmapData());
-  const trend = useAsync<TrendDataResponse>(() => amlAPI.getTrendData(selectedTimeRange));
+  const trend = useAsync<TrendDataResponse>(
+    () => amlAPI.getTrendData(selectedTimeRange),
+    true,
+    [selectedTimeRange]
+  );
   const lifecycle = useAsync<AlertLifecycleResponse>(() => amlAPI.getAlertLifecycle());
+  const refetchRealtime = realtime.refetch;
 
   // Refresh realtime indicators every 30 seconds
   useEffect(() => {
     const iv = setInterval(() => {
-      realtime.refetch();
+      void refetchRealtime();
     }, 30000);
     return () => clearInterval(iv);
-  }, []);
-
-  // Set initial client time
-  useEffect(() => {
-    setLastUpdate(new Date().toLocaleTimeString());
-  }, []);
+  }, [refetchRealtime]);
 
   // Render KPI metrics (officer-specific: branches, cases, escalation)
   const renderKPIMetrics = () => {
@@ -359,7 +357,7 @@ export default function OfficerDashboard() {
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ margin: "0 0 8px 0", fontSize: 28, fontWeight: 700 }}>Compliance Officer Dashboard</h1>
         <div style={{ fontSize: 14, opacity: 0.7 }}>Real-time AML monitoring and alert management</div>
-        <div style={{ fontSize: 12, opacity: 0.5, marginTop: 8 }}>Last updated: {lastUpdate} • <span style={{ color: "#10b981" }}>●</span> Live</div>
+        <div style={{ fontSize: 12, opacity: 0.5, marginTop: 8 }}><span style={{ color: "#10b981" }}>●</span> Live</div>
       </div>
 
       {/* KPI Metrics */}
@@ -409,4 +407,3 @@ export default function OfficerDashboard() {
     </div>
   );
 }
-

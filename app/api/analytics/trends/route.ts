@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const since = new Date(Date.now() - ms);
 
     // Build where clause based on role
-    const whereClause = user.role === "compliance_officer" && user.institutionId
+    const whereClause = user.role === "regulator" && user.institutionId
       ? { timestamp: { gte: since }, institutionId: user.institutionId }
       : { timestamp: { gte: since } };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   amlAPI,
   useAsync,
@@ -27,8 +28,9 @@ import {
   formatNumberShort,
   AML_RISK_LEVELS,
 } from "@/lib/localization";
+import { useAuth } from "@/lib/auth-context";
 
-type Role = "bank" | "regulator" | "admin";
+type Role = "admin" | "regulator";
 
 interface RiskMetrics {
   level: "low" | "medium" | "high" | "critical";
@@ -50,7 +52,9 @@ function getRiskMetrics(severity: string): RiskMetrics {
 }
 
 export default function Dashboard() {
-  const [role, setRole] = useState<Role>("bank");
+  const { user } = useAuth();
+  const router = useRouter();
+  const role: Role = user?.role === "admin" ? "admin" : "regulator";
   const [expandedView, setExpandedView] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<AlertResponse | null>(null);
 
@@ -70,14 +74,15 @@ export default function Dashboard() {
   const institutionRisk = useAsync<InstitutionRiskResponse>(() =>
     amlAPI.getInstitutionRisk()
   );
+  const refetchRealtime = realtime.refetch;
 
   // Realtime polling
   useEffect(() => {
     const iv = setInterval(() => {
-      realtime.refetch();
+      void refetchRealtime();
     }, 10000);
     return () => clearInterval(iv);
-  }, []);
+  }, [refetchRealtime]);
 
   // Critical alerts (severity = critical)
   const criticalAlerts =
@@ -115,18 +120,7 @@ export default function Dashboard() {
       },
     ];
 
-    if (role === "bank") {
-      return [
-        ...baseKPIs,
-        {
-          title: "Transactions",
-          value: formatNumberShort(kpi.data.totalTransactions),
-          icon: "💳",
-          subtext: "Today",
-          trend: undefined,
-        },
-      ];
-    } else if (role === "regulator") {
+    if (role === "regulator") {
       return [
         ...baseKPIs,
         {
@@ -137,31 +131,33 @@ export default function Dashboard() {
           trend: undefined,
         },
       ];
-    } else {
-      // admin
-      return [
-        ...baseKPIs,
-        {
-          title: "Active Rules",
-          value: 42,
-          icon: "⚙️",
-          subtext: "In system",
-          trend: undefined,
-        },
-      ];
     }
+
+    return [
+      ...baseKPIs,
+      {
+        title: "Total Transactions",
+        value: kpi.data.totalTransactions,
+        icon: "💳",
+        subtext: "In database",
+        trend:
+          kpi.data.transactionsTrend !== 0
+            ? {
+                direction: kpi.data.transactionsTrend > 0 ? ("up" as const) : ("down" as const),
+                value: `${Math.abs(kpi.data.transactionsTrend)}%`,
+                label: "vs prior week",
+              }
+            : undefined,
+      },
+    ].filter((card) => card.value !== null && card.value !== undefined);
   };
 
   const roleLabel =
-    role === "bank"
-      ? "🏦 Bank Officer"
-      : role === "regulator"
-        ? "📋 Regulator"
-        : "⚙️ Administrator";
+    role === "regulator" ? "📋 Regulator" : "⚙️ Administrator";
 
   return (
     <div className="p-8 space-y-8">
-      {/* Header with Role Selector */}
+      {/* Header with Role Badge */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="heading-2 text-primary m-0">AML Monitoring Dashboard</h1>
@@ -172,15 +168,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 bg-bg-secondary px-4 py-2 rounded-lg border border-border-default">
             <span className="text-xl">👁️</span>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as Role)}
-              className="bg-transparent text-primary font-semibold border-none outline-none cursor-pointer"
-            >
-              <option value="bank">🏦 Bank Officer</option>
-              <option value="regulator">📋 Regulator</option>
-              <option value="admin">⚙️ Administrator</option>
-            </select>
+            <span className="text-primary font-semibold">{roleLabel}</span>
           </div>
           <div className="flex items-center gap-2 bg-danger-100 px-3 py-1 rounded-full">
             <span className="w-2 h-2 bg-danger-600 rounded-full animate-pulse"></span>
@@ -193,13 +181,13 @@ export default function Dashboard() {
       {hasCriticalAlerts && (
         <AlertBanner
           type="danger"
-          title={`⚠️ ${criticalAlerts.length} Critical Alert${criticalAlerts.length > 1 ? "s" : ""} Require Immediate Action`}
+          title={`⚠️ ${criticalAlerts.length}${criticalAlerts.length > 1 ? "+" : ""} Critical Alert${criticalAlerts.length > 1 ? "s" : ""} Require Immediate Action`}
           message={`Highest risk: ${criticalAlerts[0].title}`}
           action={{
             label: "View Alert Management",
             onClick: () => {
               // Navigate to alert management
-              window.location.href = "/alert_management";
+              router.push("/alert_management?riskLevel=critical");
             },
           }}
         />
@@ -256,7 +244,7 @@ export default function Dashboard() {
                           {formatDateTimeNG(alert.timestamp)}
                         </p>
                       </div>
-                      <div className="text-right flex-shrink-0">
+                      <div className="text-right shrink-0">
                         <Badge variant="danger">CRITICAL</Badge>
                         <p className="text-xs text-danger-700 mt-2 font-semibold">
                           {alert.slsRemaining}h remaining
@@ -306,7 +294,7 @@ export default function Dashboard() {
                     render: (value) => {
                       const risk = getRiskMetrics(value as string);
                       return (
-                        <Badge variant={risk.level as any}>
+                        <Badge variant={risk.level}>
                           {risk.label}
                         </Badge>
                       );
@@ -463,7 +451,6 @@ export default function Dashboard() {
 
       {/* Footer */}
       <div className="text-center text-text-tertiary text-xs">
-        <p>Dashboard updated at {new Date().toLocaleTimeString("en-NG")}</p>
         <p>
           🇳🇬 Central Bank of Nigeria Compliant • All activities logged and audited
         </p>

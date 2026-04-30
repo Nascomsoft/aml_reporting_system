@@ -13,13 +13,19 @@ import {
   KPICard,
 } from "@/components";
 import { formatDateNG, formatDateTimeNG, formatNGN } from "@/lib/localization";
-import { amlAPI, useAsync, STRComplianceResponse } from "@/AML_frontend/services/api";
+import {
+  amlAPI,
+  useAsync,
+  FinancialInstitutionsResponse,
+  STRComplianceResponse,
+  STRSubmissionsResponse,
+} from "@/AML_frontend/services/api";
 
 // Types
 interface STRSubmission {
   id: string;
   submittedBy: string;
-  submittingInstitution: string;
+  submittingFinancialInstitution: string;
   submissionDate: string;
   transactionAmount: number;
   status: "pending" | "approved" | "rejected" | "under_review";
@@ -30,7 +36,7 @@ interface STRSubmission {
 }
 
 interface InstitutionRiskMetric {
-  institution: string;
+  financialInstitution: string;
   code: string;
   riskScore: number;
   strSubmissions: number;
@@ -52,85 +58,15 @@ export default function RegulatorPage() {
 
   // Fetch STR compliance analytics
   const strCompliance = useAsync<STRComplianceResponse>(() => amlAPI.getSTRCompliance());
-
-  const [submissions, setSubmissions] = useState<STRSubmission[]>([
-    {
-      id: "STR-2026-0001",
-      submittedBy: "Chioma Okonkwo",
-      submittingInstitution: "Guaranty Trust Bank",
-      submissionDate: "2026-03-27",
-      transactionAmount: 15000000,
-      status: "pending",
-      suspicionLevel: "critical",
-    },
-    {
-      id: "STR-2026-0002",
-      submittedBy: "Emeka Adeyemi",
-      submittingInstitution: "Access Bank Nigeria",
-      submissionDate: "2026-03-26",
-      transactionAmount: 8500000,
-      status: "under_review",
-      suspicionLevel: "high",
-      reviewedBy: "Zainab Hassan",
-    },
-    {
-      id: "STR-2026-0003",
-      submittedBy: "Chioma Okonkwo",
-      submittingInstitution: "Zenith Bank",
-      submissionDate: "2026-03-25",
-      transactionAmount: 12000000,
-      status: "approved",
-      suspicionLevel: "critical",
-      reviewedBy: "Zainab Hassan",
-      reviewDate: "2026-03-27",
-    },
-    {
-      id: "STR-2026-0004",
-      submittedBy: "Tunde Olusegun",
-      submittingInstitution: "Access Bank Nigeria",
-      submissionDate: "2026-03-24",
-      transactionAmount: 5200000,
-      status: "approved",
-      suspicionLevel: "high",
-      reviewedBy: "Zainab Hassan",
-      reviewDate: "2026-03-26",
-    },
-  ]);
-
-  const [institutions, setInstitutions] = useState<InstitutionRiskMetric[]>([
-    {
-      institution: "Guaranty Trust Bank",
-      code: "GTB",
-      riskScore: 65,
-      strSubmissions: 18,
-      averageReviewTime: 2.3,
-      complianceStatus: "compliant",
-    },
-    {
-      institution: "Access Bank Nigeria",
-      code: "ACCESS",
-      riskScore: 72,
-      strSubmissions: 12,
-      averageReviewTime: 2.8,
-      complianceStatus: "compliant",
-    },
-    {
-      institution: "Zenith Bank",
-      code: "ZENITH",
-      riskScore: 85,
-      strSubmissions: 28,
-      averageReviewTime: 3.2,
-      complianceStatus: "warning",
-    },
-    {
-      institution: "FirstBank Nigeria",
-      code: "FIRSTBANK",
-      riskScore: 42,
-      strSubmissions: 8,
-      averageReviewTime: 1.9,
-      complianceStatus: "compliant",
-    },
-  ]);
+  const financialInstitutions = useAsync<FinancialInstitutionsResponse>(() =>
+    amlAPI.getFinancialInstitutions()
+  );
+  const strSubmissionFeed = useAsync<STRSubmissionsResponse>(() =>
+    amlAPI.getSTRSubmissions(1, 50)
+  );
+  const [submissionOverrides, setSubmissionOverrides] = useState<
+    Record<string, Partial<STRSubmission>>
+  >({});
 
   const [complianceMetrics, setComplianceMetrics] = useState<ComplianceMetric[]>(
     [
@@ -167,6 +103,38 @@ export default function RegulatorPage() {
     null
   );
   const [approvalNotes, setApprovalNotes] = useState("");
+
+  const submissions: STRSubmission[] =
+    strSubmissionFeed.data?.submissions.map((submission) => ({
+      id: submission.id,
+      submittedBy: submission.submittedBy,
+      submittingFinancialInstitution: submission.submittingFinancialInstitution,
+      submissionDate: submission.submittedDate ?? submission.createdAt,
+      transactionAmount: submission.transactionAmount,
+      status:
+        submissionOverrides[submission.id]?.status ??
+        (submission.status === "under_review"
+          ? "under_review"
+          : submission.status === "closed"
+          ? "approved"
+          : "pending"),
+      suspicionLevel:
+        submissionOverrides[submission.id]?.suspicionLevel ??
+        submission.riskClassification,
+      reviewedBy: submissionOverrides[submission.id]?.reviewedBy,
+      reviewDate: submissionOverrides[submission.id]?.reviewDate,
+      notes: submissionOverrides[submission.id]?.notes,
+    })) ?? [];
+
+  const institutionRows: InstitutionRiskMetric[] =
+    financialInstitutions.data?.financialInstitutions.map((financialInstitution) => ({
+      financialInstitution: financialInstitution.name,
+      code: financialInstitution.code,
+      riskScore: financialInstitution.riskScore,
+      strSubmissions: financialInstitution.strSubmissions,
+      averageReviewTime: financialInstitution.averageReviewTime,
+      complianceStatus: financialInstitution.complianceStatus,
+    })) ?? [];
 
   const filteredSubmissions =
     filterStatus === "all"
@@ -231,18 +199,16 @@ export default function RegulatorPage() {
 
   const handleApproveSubmission = async () => {
     if (selectedSubmission && selectedSubmission.status === "pending") {
-      const updated = submissions.map((s) =>
-        s.id === selectedSubmission.id
-          ? {
-              ...s,
-              status: "approved" as const,
-              reviewedBy: "Zainab Hassan",
-              reviewDate: formatDateNG(new Date()),
-              notes: approvalNotes,
-            }
-          : s
-      );
-      setSubmissions(updated);
+      setSubmissionOverrides((current) => ({
+        ...current,
+        [selectedSubmission.id]: {
+          ...current[selectedSubmission.id],
+          status: "approved",
+          reviewedBy: "Zainab Hassan",
+          reviewDate: formatDateNG(new Date()),
+          notes: approvalNotes,
+        },
+      }));
       setShowApprovalModal(false);
       setApprovalNotes("");
     }
@@ -348,15 +314,15 @@ export default function RegulatorPage() {
             )}
           </div>
 
-          {/* Institution Risk Rankings */}
+          {/* Financial Institution Risk Rankings */}
           {strCompliance.data && (
             <Card>
-              <h3 className="heading-4 text-primary m-0 mb-4">Institution Risk Analysis (Top 10)</h3>
+              <h3 className="heading-4 text-primary m-0 mb-4">Financial Institution Risk Analysis (Top 10)</h3>
               <Table
                 columns={[
                   {
                     key: "institution",
-                    header: "Institution",
+                    header: "Financial Institution",
                     width: "50%",
                   },
                   {
@@ -516,10 +482,10 @@ export default function RegulatorPage() {
               <div className="space-y-3">
                 <div className="p-3 bg-bg-secondary rounded-lg">
                   <p className="text-xs text-text-secondary mb-1">
-                    High Risk Institutions
+                    High Risk Financial Institutions
                   </p>
                   <p className="heading-4 text-danger-600">
-                    {institutions.filter((i) => i.riskScore >= 80).length}
+                    {institutionRows.filter((financialInstitution) => financialInstitution.riskScore >= 80).length}
                   </p>
                 </div>
                 <div className="p-3 bg-bg-secondary rounded-lg">
@@ -528,8 +494,11 @@ export default function RegulatorPage() {
                   </p>
                   <p className="heading-4 text-primary">
                     {(
-                      institutions.reduce((sum, i) => sum + i.averageReviewTime, 0) /
-                      institutions.length
+                      institutionRows.reduce(
+                        (sum, financialInstitution) =>
+                          sum + financialInstitution.averageReviewTime,
+                        0
+                      ) / Math.max(institutionRows.length, 1)
                     ).toFixed(1)}
                     d
                   </p>
@@ -541,17 +510,28 @@ export default function RegulatorPage() {
             </Card>
           </div>
 
-          {/* Institution Risk Matrix */}
+          {/* Financial Institution Risk Matrix */}
           <Card>
             <h3 className="heading-4 text-primary m-0 mb-4">
-              Institution Risk Assessment
+              Financial Institution Risk Assessment
             </h3>
             <div className="overflow-x-auto">
+              {financialInstitutions.loading && (
+                <div className="text-text-secondary">Loading financial institutions...</div>
+              )}
+              {financialInstitutions.error && (
+                <AlertBanner
+                  type="danger"
+                  title="Error"
+                  message={financialInstitutions.error}
+                />
+              )}
+              {!financialInstitutions.loading && !financialInstitutions.error && (
               <Table
                 columns={[
                   {
-                    key: "institution",
-                    header: "Institution",
+                    key: "financialInstitution",
+                    header: "Financial Institution",
                     width: "25%",
                   },
                   {
@@ -602,9 +582,10 @@ export default function RegulatorPage() {
                     ),
                   },
                 ]}
-                data={institutions}
+                data={institutionRows}
                 rowKey="code"
               />
+              )}
             </div>
           </Card>
         </div>
@@ -633,6 +614,17 @@ export default function RegulatorPage() {
           </div>
 
           <Card>
+            {strSubmissionFeed.loading && (
+              <div className="text-text-secondary">Loading submissions...</div>
+            )}
+            {strSubmissionFeed.error && (
+              <AlertBanner
+                type="danger"
+                title="Error"
+                message={strSubmissionFeed.error}
+              />
+            )}
+            {!strSubmissionFeed.loading && !strSubmissionFeed.error && (
             <Table
               columns={[
                 {
@@ -646,8 +638,8 @@ export default function RegulatorPage() {
                   ),
                 },
                 {
-                  key: "submittingInstitution",
-                  header: "Institution",
+                  key: "submittingFinancialInstitution",
+                  header: "Financial Institution",
                   width: "18%",
                 },
                 {
@@ -716,6 +708,7 @@ export default function RegulatorPage() {
               data={filteredSubmissions}
               rowKey="id"
             />
+            )}
           </Card>
         </div>
       )}
@@ -748,6 +741,7 @@ export default function RegulatorPage() {
                   const count = submissions.filter(
                     (s) => s.suspicionLevel === level
                   ).length;
+                  const width = submissions.length > 0 ? (count / submissions.length) * 100 : 0;
                   return (
                     <div key={level}>
                       <div className="flex items-center justify-between mb-1">
@@ -768,7 +762,7 @@ export default function RegulatorPage() {
                               : "bg-accent-600"
                           }`}
                           style={{
-                            width: `${(count / submissions.length) * 100}%`,
+                            width: `${width}%`,
                           }}
                         />
                       </div>
@@ -792,6 +786,7 @@ export default function RegulatorPage() {
                   const count = submissions.filter(
                     (s) => s.status === status
                   ).length;
+                  const width = submissions.length > 0 ? (count / submissions.length) * 100 : 0;
                   return (
                     <div key={status}>
                       <div className="flex items-center justify-between mb-1">
@@ -812,7 +807,7 @@ export default function RegulatorPage() {
                               : "bg-primary-600"
                           }`}
                           style={{
-                            width: `${(count / submissions.length) * 100}%`,
+                            width: `${width}%`,
                           }}
                         />
                       </div>
@@ -842,17 +837,15 @@ export default function RegulatorPage() {
               variant="danger"
               onClick={() => {
                 if (selectedSubmission) {
-                  const updated = submissions.map((s) =>
-                    s.id === selectedSubmission.id
-                      ? {
-                          ...s,
-                          status: "rejected" as const,
-                          reviewedBy: "Zainab Hassan",
-                          reviewDate: formatDateNG(new Date()),
-                        }
-                      : s
-                  );
-                  setSubmissions(updated);
+                  setSubmissionOverrides((current) => ({
+                    ...current,
+                    [selectedSubmission.id]: {
+                      ...current[selectedSubmission.id],
+                      status: "rejected",
+                      reviewedBy: "Zainab Hassan",
+                      reviewDate: formatDateNG(new Date()),
+                    },
+                  }));
                   setShowApprovalModal(false);
                 }
               }}
@@ -874,9 +867,9 @@ export default function RegulatorPage() {
                   <code className="text-xs">{selectedSubmission.id}</code>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-text-secondary">Institution:</span>
+                  <span className="text-text-secondary">Financial Institution:</span>
                   <span className="font-semibold">
-                    {selectedSubmission.submittingInstitution}
+                    {selectedSubmission.submittingFinancialInstitution}
                   </span>
                 </div>
                 <div className="flex justify-between">
