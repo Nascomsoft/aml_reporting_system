@@ -152,12 +152,12 @@ export default function OfficerDashboard() {
           <div style={{ fontWeight: 700, fontSize: 18, marginTop: 4 }}>{r.liveNotifications}</div>
         </div>
         <div style={{ padding: 8, background: "#0f172a", borderRadius: 6 }}>
-          <div style={{ fontSize: 11, opacity: 0.7 }}>Rule-Based</div>
-          <div style={{ fontWeight: 700, fontSize: 18, marginTop: 4 }}>{r.edgeDetectionCount}</div>
+          <div style={{ fontSize: 11, opacity: 0.7 }}>Rule-Based Detections</div>
+          <div style={{ fontWeight: 700, fontSize: 18, marginTop: 4 }}>{r.ruleBasedDetectionCount}</div>
         </div>
         <div style={{ padding: 8, background: "#0f172a", borderRadius: 6 }}>
-          <div style={{ fontSize: 11, opacity: 0.7 }}>System-Based</div>
-          <div style={{ fontWeight: 700, fontSize: 18, marginTop: 4 }}>{r.coreDetectionCount}</div>
+          <div style={{ fontSize: 11, opacity: 0.7 }}>Recently Escalated</div>
+          <div style={{ fontWeight: 700, fontSize: 18, marginTop: 4 }}>{r.recentlyEscalated}</div>
         </div>
       </div>
     );

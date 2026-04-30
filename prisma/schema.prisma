@@ -106,7 +106,6 @@ enum AlertSeverity {
 }
 
 enum DetectionType {
-  EDGE
   CORE
 }
 

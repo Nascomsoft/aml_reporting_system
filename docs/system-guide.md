@@ -163,6 +163,8 @@ The schema also defines the key enums that shape the user interface (UI) and API
 
 The transaction screening logic lives in `lib/amlRuleEngine.ts`. The main entry point is `evaluateTransactionAgainstRules()`, which loads active rules and evaluates each one against the incoming transaction.
 
+The application is now rule-based only. The former edge-versus-core detection split has been removed from the user-facing and API surfaces, so alerts, dashboards, and reports should be read as rule-based detections.
+
 The evaluation flow is:
 
 1. Compute a base risk score from the transaction amount, transaction type, and country.

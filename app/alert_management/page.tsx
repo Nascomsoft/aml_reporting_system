@@ -23,7 +23,6 @@ interface ManagedAlert extends AlertResponse {
   riskScore: number; // 0-100
   amount: number;
   ruleTriggered: string;
-  detectionSource: "edge" | "core";
   lifecycleStage: "new" | "underReview" | "escalated" | "closed";
   slaRemainingHours: number;
   institution?: string;
@@ -42,7 +41,6 @@ interface FilterState {
   dateTo: string;
   riskLevel: string;
   lifecycleStage: string;
-  detectionSource: string;
   institution: string;
   amountMin: string;
   amountMax: string;
@@ -53,19 +51,19 @@ const EMPTY_FILTERS: FilterState = {
   dateTo: "",
   riskLevel: "",
   lifecycleStage: "",
-  detectionSource: "",
   institution: "",
   amountMin: "",
   amountMax: "",
 };
 
-function getFiltersFromSearchParams(searchParams: URLSearchParams | ReadonlyURLSearchParams): FilterState {
+type SearchParamsLike = Pick<URLSearchParams, "get" | "toString">;
+
+function getFiltersFromSearchParams(searchParams: SearchParamsLike): FilterState {
   return {
     dateFrom: searchParams.get("dateFrom") ?? "",
     dateTo: searchParams.get("dateTo") ?? "",
     riskLevel: searchParams.get("riskLevel") ?? "",
     lifecycleStage: searchParams.get("lifecycleStage") ?? "",
-    detectionSource: searchParams.get("detectionSource") ?? "",
     institution: searchParams.get("institution") ?? "",
     amountMin: searchParams.get("amountMin") ?? "",
     amountMax: searchParams.get("amountMax") ?? "",
@@ -78,7 +76,6 @@ function filtersAreEqual(left: FilterState, right: FilterState): boolean {
     left.dateTo === right.dateTo &&
     left.riskLevel === right.riskLevel &&
     left.lifecycleStage === right.lifecycleStage &&
-    left.detectionSource === right.detectionSource &&
     left.institution === right.institution &&
     left.amountMin === right.amountMin &&
     left.amountMax === right.amountMax
@@ -128,7 +125,6 @@ export default function AlertManagement() {
     if (filters.dateTo) params.set("dateTo", filters.dateTo);
     if (filters.riskLevel) params.set("riskLevel", filters.riskLevel);
     if (filters.lifecycleStage) params.set("lifecycleStage", filters.lifecycleStage);
-    if (filters.detectionSource) params.set("detectionSource", filters.detectionSource);
     if (filters.institution) params.set("institution", filters.institution);
     if (filters.amountMin) params.set("amountMin", filters.amountMin);
     if (filters.amountMax) params.set("amountMax", filters.amountMax);
@@ -150,7 +146,6 @@ export default function AlertManagement() {
       try {
         const resp = await amlAPI.getAlerts(1, 50, {
           severity: filters.riskLevel,
-          detectionType: filters.detectionSource,
           lifecycleStage: filters.lifecycleStage,
           institution: filters.institution,
           dateFrom: filters.dateFrom,
@@ -166,7 +161,6 @@ export default function AlertManagement() {
           riskScore: a.riskScore ?? (a.severity === 'critical' ? 90 : a.severity === 'high' ? 70 : a.severity === 'medium' ? 50 : 20),
           amount: a.amount ?? 0,
           ruleTriggered: a.ruleTriggered || "N/A",
-          detectionSource: a.detectionType as "edge" | "core",
           lifecycleStage: a.lifecycleStage || 'new',
           slaRemainingHours: a.slsRemaining,
           });
@@ -333,23 +327,6 @@ export default function AlertManagement() {
                       { value: "underReview", label: "Under Review" },
                       { value: "escalated", label: "Escalated" },
                       { value: "closed", label: "Closed" },
-                    ]}
-                    fullWidth
-                  />
-                </div>
-
-                {/* Filter by Detection Source */}
-                <div>
-                  <label className="text-xs font-semibold text-text-secondary block mb-2">
-                    Detection Source
-                  </label>
-                  <Select
-                    value={filters.detectionSource}
-                    onChange={(e) => updateFilter("detectionSource", e.target.value)}
-                    options={[
-                      { value: "", label: "All Sources" },
-                      { value: "edge", label: "Edge (ML)" },
-                      { value: "core", label: "Core (Rules)" },
                     ]}
                     fullWidth
                   />
@@ -614,8 +591,8 @@ export default function AlertManagement() {
                   <span className="font-semibold">{selectedAlert.ruleTriggered}</span>
                 </p>
                 <p>
-                  <span className="text-text-secondary">Detection Source:</span>{" "}
-                  <Badge variant="primary">{selectedAlert.detectionSource}</Badge>
+                  <span className="text-text-secondary">Detection Method:</span>{" "}
+                  <Badge variant="primary">Rule-based</Badge>
                 </p>
                 <p>
                   <span className="text-text-secondary">SLA Remaining:</span>{" "}

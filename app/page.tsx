@@ -9,8 +9,6 @@ import {
   KPIResponse,
   AlertsListResponse,
   RealTimeIndicatorsResponse,
-  HeatmapDataResponse,
-  TrendDataResponse,
   AlertLifecycleResponse,
   InstitutionRiskResponse,
 } from "../AML_frontend/services/api";
@@ -23,17 +21,14 @@ import {
   Button,
 } from "@/components";
 import {
-  formatNGN,
   formatDateTimeNG,
-  formatNumberShort,
-  AML_RISK_LEVELS,
 } from "@/lib/localization";
 import { useAuth } from "@/lib/auth-context";
 
 type Role = "admin" | "regulator";
 
 interface RiskMetrics {
-  level: "low" | "medium" | "high" | "critical";
+  variant: "success" | "warning" | "danger" | "primary";
   color: string;
   label: string;
 }
@@ -41,13 +36,13 @@ interface RiskMetrics {
 function getRiskMetrics(severity: string): RiskMetrics {
   switch (severity) {
     case "critical":
-      return { level: "critical", color: "#dc2626", label: "Critical" };
+      return { variant: "danger", color: "#dc2626", label: "Critical" };
     case "high":
-      return { level: "high", color: "#ea580c", label: "High" };
+      return { variant: "danger", color: "#ea580c", label: "High" };
     case "medium":
-      return { level: "medium", color: "#f59e0b", label: "Medium" };
+      return { variant: "warning", color: "#f59e0b", label: "Medium" };
     default:
-      return { level: "low", color: "#16a34a", label: "Low" };
+      return { variant: "success", color: "#16a34a", label: "Low" };
   }
 }
 
@@ -56,7 +51,7 @@ export default function Dashboard() {
   const router = useRouter();
   const role: Role = user?.role === "admin" ? "admin" : "regulator";
   const [expandedView, setExpandedView] = useState(false);
-  const [selectedAlert, setSelectedAlert] = useState<AlertResponse | null>(null);
+  const [, setSelectedAlert] = useState<AlertResponse | null>(null);
 
   // API Calls
   const kpi = useAsync<KPIResponse>(() => amlAPI.getKPISummary());
@@ -66,8 +61,6 @@ export default function Dashboard() {
   const realtime = useAsync<RealTimeIndicatorsResponse>(() =>
     amlAPI.getRealTimeIndicators()
   );
-  const heatmap = useAsync<HeatmapDataResponse>(() => amlAPI.getHeatmapData());
-  const trend = useAsync<TrendDataResponse>(() => amlAPI.getTrendData("24h"));
   const lifecycle = useAsync<AlertLifecycleResponse>(() =>
     amlAPI.getAlertLifecycle()
   );
@@ -222,7 +215,7 @@ export default function Dashboard() {
           <Card>
             <div className="flex items-center justify-between mb-6">
               <h5 className="heading-5 text-primary m-0">Critical Alerts</h5>
-              <Button size="sm" variant="ghost">
+              <Button size="sm" variant="ghost" onClick={() => router.push("/alert_management?riskLevel=critical")}>
                 View All
               </Button>
             </div>
@@ -294,7 +287,7 @@ export default function Dashboard() {
                     render: (value) => {
                       const risk = getRiskMetrics(value as string);
                       return (
-                        <Badge variant={risk.level}>
+                        <Badge variant={risk.variant}>
                           {risk.label}
                         </Badge>
                       );
@@ -345,15 +338,15 @@ export default function Dashboard() {
                   </p>
                 </div>
                 <div className="p-4 bg-bg-tertiary rounded-lg">
-                  <p className="text-xs text-text-secondary">Edge Detections</p>
+                  <p className="text-xs text-text-secondary">Rule-based Detections</p>
                   <p className="heading-4 text-primary mt-1">
-                    {realtime.data.edgeDetectionCount}
+                    {realtime.data.ruleBasedDetectionCount}
                   </p>
                 </div>
                 <div className="p-4 bg-bg-tertiary rounded-lg">
-                  <p className="text-xs text-text-secondary">Core Detections</p>
+                  <p className="text-xs text-text-secondary">Recently Escalated</p>
                   <p className="heading-4 text-primary mt-1">
-                    {realtime.data.coreDetectionCount}
+                    {realtime.data.recentlyEscalated}
                   </p>
                 </div>
               </div>

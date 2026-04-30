@@ -18,8 +18,7 @@ export async function GET() {
       closedAlerts,
       overdueCases,
       strSubmittedToday,
-      edgeDetection,
-      coreDetection,
+      ruleBasedDetectionCount,
       pendingRegulatoryReviews,
       recentTransactions,
     ] = await Promise.all([
@@ -34,8 +33,7 @@ export async function GET() {
       prisma.sTRSubmission.count({
         where: { submittedDate: { gte: todayStart } },
       }),
-      prisma.alert.count({ where: { detectionType: "EDGE" } }),
-      prisma.alert.count({ where: { detectionType: "CORE" } }),
+      prisma.alert.count(),
       prisma.sTRSubmission.count({ where: { status: "UNDER_REVIEW" } }),
       prisma.transaction.count({ where: { date: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } } }),
     ]);
@@ -75,8 +73,7 @@ export async function GET() {
       overdueCases,
       slaCountdown: `${slaH}h ${slaM}m`,
       strSubmittedToday,
-      edgeDetection,
-      coreDetection,
+      ruleBasedDetectionCount,
       pendingRegulatoryReviews,
     });
   } catch (error) {

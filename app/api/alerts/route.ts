@@ -4,10 +4,8 @@ import { alertFiltersSchema, alertUpdateSchema } from "@/lib/validation";
 import { handleApiError } from "@/lib/errorHandler";
 import {
   toSeverity,
-  toDetectionType,
   toLifecycle,
   fromSeverity,
-  fromDetectionType,
   fromLifecycle,
 } from "@/lib/enumMaps";
 import type { Prisma } from "@prisma/client";
@@ -21,7 +19,6 @@ export async function GET(request: Request) {
     const where: Prisma.AlertWhereInput = {};
 
     if (filters.severity) where.severity = toSeverity(filters.severity);
-    if (filters.detectionType) where.detectionType = toDetectionType(filters.detectionType);
     if (filters.lifecycleStage) where.lifecycleStage = toLifecycle(filters.lifecycleStage);
     if (filters.institution) {
       where.institution = { name: { contains: filters.institution, mode: "insensitive" } };
@@ -58,7 +55,6 @@ export async function GET(request: Request) {
         severity: fromSeverity(a.severity),
         slsRemaining: a.slsRemaining,
         institution: a.institution?.name ?? "",
-        detectionType: fromDetectionType(a.detectionType),
         timestamp: a.timestamp.toISOString(),
         lifecycleStage: fromLifecycle(a.lifecycleStage),
         riskScore: a.riskScore,

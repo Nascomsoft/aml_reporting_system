@@ -34,8 +34,7 @@ export interface KPIResponse {
   overdueCases: number;
   slaCountdown: string; // Format: "2h 15m"
   strSubmittedToday: number;
-  edgeDetection: number;
-  coreDetection: number;
+  ruleBasedDetectionCount: number;
   pendingRegulatoryReviews: number;
 }
 
@@ -45,7 +44,6 @@ export interface AlertResponse {
   severity: 'critical' | 'high' | 'medium' | 'low';
   slsRemaining: number; // in hours
   institution?: string;
-  detectionType: 'edge' | 'core';
   timestamp: string;
 }
 
@@ -58,8 +56,7 @@ export interface AlertsListResponse {
 
 export interface RealTimeIndicatorsResponse {
   liveNotifications: number;
-  edgeDetectionCount: number;
-  coreDetectionCount: number;
+  ruleBasedDetectionCount: number;
   recentlyEscalated: number;
   approachingSLA: number;
 }
@@ -252,7 +249,6 @@ export const amlAPI = {
     pageSize: number = 20,
     filters: {
       severity?: string;
-      detectionType?: string;
       lifecycleStage?: string;
       institution?: string;
       dateFrom?: string;

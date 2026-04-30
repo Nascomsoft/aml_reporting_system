@@ -1,7 +1,6 @@
 import {
   AlertSeverity,
   LifecycleStage,
-  DetectionType,
   TransactionStatus,
   TransactionType,
   UserRole,
@@ -60,26 +59,6 @@ export function toLifecycle(s: string): LifecycleStage {
 
 export function fromLifecycle(s: LifecycleStage): string {
   return lifecycleReverseMap[s] ?? "new";
-}
-
-// ─── Detection type mapping ──────────────────────────────────────────────────
-
-const detectionMap: Record<string, DetectionType> = {
-  edge: DetectionType.EDGE,
-  core: DetectionType.CORE,
-};
-
-const detectionReverseMap: Record<DetectionType, string> = {
-  [DetectionType.EDGE]: "edge",
-  [DetectionType.CORE]: "core",
-};
-
-export function toDetectionType(s: string): DetectionType {
-  return detectionMap[s.toLowerCase()] ?? DetectionType.CORE;
-}
-
-export function fromDetectionType(s: DetectionType): string {
-  return detectionReverseMap[s] ?? "core";
 }
 
 // ─── Transaction status mapping ──────────────────────────────────────────────

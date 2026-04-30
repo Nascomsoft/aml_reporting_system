@@ -6,7 +6,6 @@ export const alertFiltersSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   severity: z.enum(["critical", "high", "medium", "low"]).optional(),
-  detectionType: z.enum(["edge", "core"]).optional(),
   lifecycleStage: z.enum(["new", "underReview", "escalated", "strSubmitted", "closed"]).optional(),
   institution: z.string().optional(),
   dateFrom: z.string().optional(),

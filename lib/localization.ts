@@ -140,10 +140,9 @@ export const CASE_LIFECYCLE_STAGES = [
 ];
 
 /**
- * Detection sources for AML alerts
+ * Detection labels for AML alerts
  */
 export const DETECTION_SOURCES = [
-  { value: 'edge', label: 'Edge (ML-based)' },
   { value: 'core', label: 'Core (Rule-based)' },
 ];
 

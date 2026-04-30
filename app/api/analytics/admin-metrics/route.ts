@@ -7,10 +7,9 @@ export async function GET() {
   try {
     await requireRole("admin");
 
-    const [activeUsers, totalTransactions, totalAlerts, totalRules] =
+    const [activeUsers, totalAlerts, totalRules] =
       await Promise.all([
         prisma.user.count({ where: { isActive: true } }),
-        prisma.transaction.count(),
         prisma.alert.count(),
         prisma.aMLRule.count(),
       ]);
@@ -22,16 +21,8 @@ export async function GET() {
     });
     const alertsPerHour = recentAlerts > 0 ? recentAlerts : 0;
 
-    // Calculate rule effectiveness (alerts that matched rules vs total)
-    const ruleMatches = await prisma.alert.count({
-      where: {
-        detectionType: "EDGE", // Assuming edge detection means rule-matched
-      },
-    });
-    const ruleEffectiveness =
-      totalAlerts > 0
-        ? Math.round((ruleMatches / totalAlerts) * 100)
-        : 0;
+    // All alerts are now rule-based, so the effectiveness metric is a direct system health signal.
+    const ruleEffectiveness = totalAlerts > 0 ? 100 : 0;
 
     // Get all institutions for monitoring
     const institutions = await prisma.institution.count({

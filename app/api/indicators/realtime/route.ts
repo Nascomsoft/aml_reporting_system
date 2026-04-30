@@ -8,14 +8,12 @@ export async function GET() {
 
     const [
       liveNotifications,
-      edgeDetectionCount,
-      coreDetectionCount,
+      ruleBasedDetectionCount,
       recentlyEscalated,
       approachingSLA,
     ] = await Promise.all([
       prisma.notification.count({ where: { isRead: false } }),
-      prisma.alert.count({ where: { detectionType: "EDGE" } }),
-      prisma.alert.count({ where: { detectionType: "CORE" } }),
+      prisma.alert.count(),
       prisma.alert.count({
         where: {
           lifecycleStage: "ESCALATED",
@@ -33,8 +31,7 @@ export async function GET() {
 
     return NextResponse.json({
       liveNotifications,
-      edgeDetectionCount,
-      coreDetectionCount,
+      ruleBasedDetectionCount,
       recentlyEscalated,
       approachingSLA,
     });
