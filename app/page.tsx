@@ -17,7 +17,6 @@ import {
   KPICard,
   Badge,
   AlertBanner,
-  Table,
   Button,
 } from "@/components";
 import {
@@ -26,25 +25,6 @@ import {
 import { useAuth } from "@/lib/auth-context";
 
 type Role = "admin" | "regulator";
-
-interface RiskMetrics {
-  variant: "success" | "warning" | "danger" | "primary";
-  color: string;
-  label: string;
-}
-
-function getRiskMetrics(severity: string): RiskMetrics {
-  switch (severity) {
-    case "critical":
-      return { variant: "danger", color: "#dc2626", label: "Critical" };
-    case "high":
-      return { variant: "danger", color: "#ea580c", label: "High" };
-    case "medium":
-      return { variant: "warning", color: "#f59e0b", label: "Medium" };
-    default:
-      return { variant: "success", color: "#16a34a", label: "Low" };
-  }
-}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -252,73 +232,6 @@ export default function Dashboard() {
                 ✓ No critical alerts
               </div>
             )}
-          </Card>
-
-          {/* Top Alerts Table */}
-          <Card>
-            <div className="flex items-center justify-between mb-6">
-              <h5 className="heading-5 text-primary m-0">
-                All Alerts (Last 10)
-              </h5>
-              <Badge variant="primary">{topAlerts.data?.alerts.length || 0}</Badge>
-            </div>
-            {topAlerts.loading ? (
-              <p className="text-text-secondary">Loading alerts...</p>
-            ) : topAlerts.error ? (
-              <AlertBanner type="danger" message={topAlerts.error} />
-            ) : topAlerts.data?.alerts ? (
-              <Table
-                columns={[
-                  {
-                    key: "title",
-                    header: "Alert",
-                    width: "35%",
-                    render: (value) => <span className="font-semibold">{value}</span>,
-                  },
-                  {
-                    key: "institution",
-                    header: "Institution",
-                    width: "25%",
-                  },
-                  {
-                    key: "severity",
-                    header: "Risk Level",
-                    width: "15%",
-                    render: (value) => {
-                      const risk = getRiskMetrics(value as string);
-                      return (
-                        <Badge variant={risk.variant}>
-                          {risk.label}
-                        </Badge>
-                      );
-                    },
-                  },
-                  {
-                    key: "slsRemaining",
-                    header: "SLA",
-                    width: "10%",
-                    render: (value) => (
-                      <span className="font-semibold">
-                        {value}h
-                      </span>
-                    ),
-                  },
-                  {
-                    key: "id",
-                    header: "Action",
-                    width: "15%",
-                    render: () => (
-                      <Button size="sm" variant="primary">
-                        Review
-                      </Button>
-                    ),
-                  },
-                ]}
-                data={topAlerts.data.alerts}
-                rowKey="id"
-                onRowClick={(row) => setSelectedAlert(row)}
-              />
-            ) : null}
           </Card>
         </div>
 

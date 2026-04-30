@@ -11,6 +11,8 @@ export interface SelectProps
   helperText?: string;
   fullWidth?: boolean;
   options: Array<{ value: string | number; label: string }>;
+  placeholder?: string;
+  placeholderDisabled?: boolean;
 }
 
 export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
@@ -21,6 +23,8 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
       helperText,
       fullWidth = true,
       options = [],
+      placeholder = 'Select an option',
+      placeholderDisabled = false,
       className = '',
       ...props
     },
@@ -41,7 +45,9 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           className={`input cursor-pointer ${errorClass} ${className}`.trim()}
           {...props}
         >
-          <option value="">Select an option</option>
+          <option value="" disabled={placeholderDisabled}>
+            {placeholder}
+          </option>
           {options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}

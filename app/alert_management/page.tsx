@@ -7,6 +7,7 @@ import {
   amlAPI,
 } from "../../AML_frontend/services/api";
 import {
+  AlertBanner,
   Card,
   Badge,
   Button,
@@ -15,7 +16,7 @@ import {
   Table,
   Modal,
 } from "@/components";
-import { formatNGN } from "@/lib/localization";
+import { NIGERIAN_INSTITUTIONS, formatNGN } from "@/lib/localization";
 
 // augmentation of alert type for management UI
 interface ManagedAlert extends AlertResponse {
@@ -93,7 +94,14 @@ export default function AlertManagement() {
   const [showTransitionModal, setShowTransitionModal] = useState(false);
   const [pendingTransition, setPendingTransition] = useState<string>("");
   const [transitionNotes, setTransitionNotes] = useState("");
+  const [transitioningAlertId, setTransitioningAlertId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{
+    type: "success" | "warning" | "danger" | "info";
+    title: string;
+    message: string;
+  } | null>(null);
   const [isLargeScreen, setIsLargeScreen] = useState(true);
+  const feedbackTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [filters, setFilters] = useState<FilterState>(() =>
     getFiltersFromSearchParams(searchParams)
@@ -117,6 +125,14 @@ export default function AlertManagement() {
       filtersAreEqual(currentFilters, nextFilters) ? currentFilters : nextFilters
     );
   }, [searchParams]);
+
+  React.useEffect(() => {
+    return () => {
+      if (feedbackTimeoutRef.current) {
+        clearTimeout(feedbackTimeoutRef.current);
+      }
+    };
+  }, []);
 
   React.useEffect(() => {
     const params = new URLSearchParams();
@@ -183,21 +199,80 @@ export default function AlertManagement() {
     setFilters(EMPTY_FILTERS);
   };
 
-  const requestTransition = (alert: ManagedAlert, targetStage: string) => {
-    setSelectedAlert(alert);
-    setPendingTransition(targetStage);
-    setTransitionNotes("");
-    setShowTransitionModal(true);
+  const showFeedback = (
+    type: "success" | "warning" | "danger" | "info",
+    title: string,
+    message: string
+  ) => {
+    if (feedbackTimeoutRef.current) {
+      clearTimeout(feedbackTimeoutRef.current);
+    }
+
+    setFeedback({ type, title, message });
+    feedbackTimeoutRef.current = setTimeout(() => {
+      setFeedback(null);
+      feedbackTimeoutRef.current = null;
+    }, 4000);
+  };
+
+  const getTransitionLabel = (stage: string) => {
+    switch (stage) {
+      case "underReview":
+        return "under review";
+      case "escalated":
+        return "escalated";
+      default:
+        return stage;
+    }
+  };
+
+  const performTransition = async (alert: ManagedAlert, targetStage: string) => {
+    setTransitioningAlertId(alert.id);
+
+    try {
+      await amlAPI.updateAlertLifecycle(alert.id, targetStage);
+      setAlerts((currentAlerts) =>
+        currentAlerts.map((currentAlert) =>
+          currentAlert.id === alert.id
+            ? {
+                ...currentAlert,
+                lifecycleStage: targetStage as ManagedAlert["lifecycleStage"],
+              }
+            : currentAlert
+        )
+      );
+
+      setSelectedAlert((currentAlert) =>
+        currentAlert?.id === alert.id
+          ? {
+              ...currentAlert,
+              lifecycleStage: targetStage as ManagedAlert["lifecycleStage"],
+            }
+          : currentAlert
+      );
+      showFeedback(
+        "success",
+        "Alert updated",
+        `Alert ${alert.id} moved to ${getTransitionLabel(targetStage)}.`
+      );
+      return true;
+    } catch {
+      showFeedback(
+        "danger",
+        "Update failed",
+        `Could not move alert ${alert.id} to ${getTransitionLabel(targetStage)}.`
+      );
+      return false;
+    } finally {
+      setTransitioningAlertId(null);
+    }
   };
 
   const confirmTransition = async () => {
     if (selectedAlert) {
-      try {
-        await amlAPI.updateAlertLifecycle(selectedAlert.id, pendingTransition);
-                        selectedAlert.lifecycleStage = pendingTransition as ManagedAlert["lifecycleStage"];
-        setAlerts([...alerts]);
-      } catch (err) {
-        console.error("failed to update alert", err);
+      const succeeded = await performTransition(selectedAlert, pendingTransition);
+      if (!succeeded) {
+        return;
       }
     }
     setShowTransitionModal(false);
@@ -253,6 +328,15 @@ export default function AlertManagement() {
         </div>
       </div>
 
+      {feedback && (
+        <AlertBanner
+          type={feedback.type}
+          title={feedback.title}
+          message={feedback.message}
+          onClose={() => setFeedback(null)}
+        />
+      )}
+
       {/* Grid: Filters + Table */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Left: Filters Panel */}
@@ -265,8 +349,9 @@ export default function AlertManagement() {
                 variant="ghost"
                 onClick={() => setFilterOpen(!filterOpen)}
                 className="lg:hidden"
+                aria-label={filterOpen ? "Hide filters" : "Show filters"}
               >
-                {filterOpen ? "Hide" : "Show"}
+                ☰
               </Button>
             </div>
 
@@ -302,8 +387,9 @@ export default function AlertManagement() {
                   <Select
                     value={filters.riskLevel}
                     onChange={(e) => updateFilter("riskLevel", e.target.value)}
+                    placeholder="All Risk Levels"
+                    placeholderDisabled
                     options={[
-                      { value: "", label: "All Risk Levels" },
                       { value: "low", label: "Low Risk" },
                       { value: "medium", label: "Medium Risk" },
                       { value: "high", label: "High Risk" },
@@ -321,8 +407,9 @@ export default function AlertManagement() {
                   <Select
                     value={filters.lifecycleStage}
                     onChange={(e) => updateFilter("lifecycleStage", e.target.value)}
+                    placeholder="All Stages"
+                    placeholderDisabled
                     options={[
-                      { value: "", label: "All Stages" },
                       { value: "new", label: "New" },
                       { value: "underReview", label: "Under Review" },
                       { value: "escalated", label: "Escalated" },
@@ -333,13 +420,18 @@ export default function AlertManagement() {
                 </div>
 
                 {/* Filter by Institution */}
-                <FormInput
-                  label="Financial Institution"
-                  value={filters.institution}
-                  onChange={(e) => updateFilter("institution", e.target.value)}
-                  placeholder="Bank name"
-                  fullWidth
-                />
+                  <Select
+                    label="Financial Institution"
+                    value={filters.institution}
+                    onChange={(e) => updateFilter("institution", e.target.value)}
+                    placeholder="Select an institution"
+                    placeholderDisabled
+                    options={NIGERIAN_INSTITUTIONS.map((institution) => ({
+                      value: institution.name,
+                      label: institution.name,
+                    }))}
+                    fullWidth
+                  />
 
                 {/* Filter by Amount Range */}
                 <div>
@@ -497,22 +589,28 @@ export default function AlertManagement() {
                         <div className="flex gap-1">
                           {alert.lifecycleStage === "new" && (
                             <Button
+                              type="button"
                               size="sm"
                               variant="primary"
-                              onClick={() =>
-                                requestTransition(alert, "underReview")
-                              }
+                              isLoading={transitioningAlertId === alert.id}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void performTransition(alert, "underReview");
+                              }}
                             >
                               Review
                             </Button>
                           )}
                           {alert.lifecycleStage === "underReview" && (
                             <Button
+                              type="button"
                               size="sm"
                               variant="danger"
-                              onClick={() =>
-                                requestTransition(alert, "escalated")
-                              }
+                              isLoading={transitioningAlertId === alert.id}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void performTransition(alert, "escalated");
+                              }}
                             >
                               Escalate
                             </Button>
@@ -542,6 +640,7 @@ export default function AlertManagement() {
         footer={
           <>
             <Button
+              type="button"
               variant="secondary"
               onClick={() => {
                 setShowTransitionModal(false);
@@ -550,7 +649,7 @@ export default function AlertManagement() {
             >
               Cancel
             </Button>
-            <Button variant="primary" onClick={confirmTransition}>
+            <Button type="button" variant="primary" onClick={confirmTransition}>
               Confirm Transition
             </Button>
           </>
