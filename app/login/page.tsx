@@ -161,7 +161,7 @@ export default function LoginPage() {
                   </p>
                   <p>
                     <span className="font-mono bg-bg-secondary px-2 py-1 rounded">
-                      password
+                      password123
                     </span>
                   </p>
                   <p>
