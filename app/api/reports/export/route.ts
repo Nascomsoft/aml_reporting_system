@@ -24,10 +24,10 @@ export async function POST(request: Request) {
     let fileName: string;
 
     if (data.format === "csv") {
-      const header = "ID,Title,Severity,Institution,Detection,Stage,Risk Score,Amount,Customer,Timestamp";
+      const header = "ID,Title,Severity,Institution,Stage,Risk Score,Amount,Customer,Timestamp";
       const rows = alerts.map(
         (a) =>
-          `${a.id},"${a.title}",${a.severity},"${a.institution?.name ?? ""}",${a.detectionType},${a.lifecycleStage},${a.riskScore},${a.amount},"${a.customerName}",${a.timestamp.toISOString()}`
+          `${a.id},"${a.title}",${a.severity},"${a.institution?.name ?? ""}",${a.lifecycleStage},${a.riskScore},${a.amount},"${a.customerName}",${a.timestamp.toISOString()}`
       );
       content = [header, ...rows].join("\n");
       contentType = "text/csv";

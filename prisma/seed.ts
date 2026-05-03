@@ -208,7 +208,6 @@ async function main() {
 
   // ─── Create Alerts ───────────────────────────────────────────────────
   const severities = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
-  const detectionType = "CORE" as const;
   const lifecycleStages = ["NEW", "UNDER_REVIEW", "ESCALATED", "STR_SUBMITTED", "CLOSED"] as const;
 
   const alertTitles = [
@@ -236,7 +235,6 @@ async function main() {
           title: alertTitles[i % alertTitles.length],
           description: `Automated detection: ${alertTitles[i % alertTitles.length]} at ${institutions[instIdx].name}`,
           severity: severities[severityIdx],
-          detectionType,
           lifecycleStage: lifecycleStages[lifecycleIdx],
           riskScore: 100 - severityIdx * 20 - Math.floor(Math.random() * 15),
           amount: linkedTx.amount,

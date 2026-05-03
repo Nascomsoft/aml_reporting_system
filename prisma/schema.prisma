@@ -68,7 +68,6 @@ model Alert {
   title           String
   description     String?
   severity        AlertSeverity
-  detectionType   DetectionType
   lifecycleStage  LifecycleStage @default(NEW)
   riskScore       Float
   amount          Float
@@ -103,10 +102,6 @@ enum AlertSeverity {
   HIGH
   MEDIUM
   LOW
-}
-
-enum DetectionType {
-  CORE
 }
 
 enum LifecycleStage {

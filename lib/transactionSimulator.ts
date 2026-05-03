@@ -218,7 +218,6 @@ export async function simulateTransaction(
         title: `Flag: ${flagResult.ruleName}`,
         description: `Transaction ${createdTransaction.transactionRef} triggered ${flagResult.ruleName}`,
         severity: (flagResult.severity || "MEDIUM") as Parameters<typeof prisma.alert.create>[0]["data"]["severity"],
-        detectionType: "CORE",
         lifecycleStage: "NEW",
         riskScore: flagResult.riskScore,
         amount: createdTransaction.amount,
