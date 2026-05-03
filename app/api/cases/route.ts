@@ -8,9 +8,31 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const page = parseInt(url.searchParams.get("page") || "1", 10);
     const pageSize = parseInt(url.searchParams.get("pageSize") || "20", 10);
+    const search = url.searchParams.get("search") || "";
+    const riskLevel = url.searchParams.get("riskLevel");
+    const status = url.searchParams.get("status");
+
+    // Build filter conditions
+    const where: Record<string, unknown> = {};
+    
+    if (search) {
+      where.OR = [
+        { caseNumber: { contains: search, mode: "insensitive" } },
+        { customer: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    
+    if (riskLevel && riskLevel !== "all") {
+      where.riskLevel = riskLevel.toUpperCase();
+    }
+    
+    if (status && status !== "all") {
+      where.status = status.toUpperCase();
+    }
 
     const [cases, total] = await Promise.all([
       prisma.case.findMany({
+        where,
         include: {
           linkedAlerts: { select: { id: true } },
           investigator: { select: { name: true } },
@@ -19,7 +41,7 @@ export async function GET(request: Request) {
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
-      prisma.case.count(),
+      prisma.case.count({ where }),
     ]);
 
     return NextResponse.json({
@@ -35,6 +57,7 @@ export async function GET(request: Request) {
         complianceDeadline: c.complianceDeadline.toISOString().split("T")[0],
         slaRemainingHours: c.slaRemainingHours,
         overdue: c.overdue,
+        createdAt: c.createdAt.toISOString().split("T")[0],
       })),
       total,
       page,

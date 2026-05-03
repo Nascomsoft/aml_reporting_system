@@ -191,6 +191,7 @@ export interface STRSubmissionsResponse {
 // case management types
 export interface CaseRecord {
   id: string;
+  caseNumber: string;
   linkedAlerts: string[];
   customer: string;
   riskLevel: 'low' | 'medium' | 'high' | 'critical';

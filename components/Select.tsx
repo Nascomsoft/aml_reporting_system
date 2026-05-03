@@ -10,7 +10,7 @@ export interface SelectProps
   error?: string;
   helperText?: string;
   fullWidth?: boolean;
-  options: Array<{ value: string | number; label: string }>;
+  options: Array<{ value: string | number; label: string; disabled?: boolean }>;
   placeholder?: string;
   placeholderDisabled?: boolean;
 }
@@ -49,7 +49,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             {placeholder}
           </option>
           {options.map((option) => (
-            <option key={option.value} value={option.value}>
+            <option key={option.value} value={option.value} disabled={option.disabled}>
               {option.label}
             </option>
           ))}
