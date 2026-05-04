@@ -908,38 +908,6 @@ export default function RegulatorPage() {
           </div>
         )}
       </Modal>
-
-      {/* Tab Navigation */}
-      <Card className="fixed bottom-8 left-8 right-8 lg:left-auto lg:right-8 lg:w-96">
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            size="sm"
-            variant={activeTab === "overview" ? "primary" : "secondary"}
-            onClick={() => setActiveTab("overview")}
-          >
-            📊 Overview
-          </Button>
-          <Button
-            size="sm"
-            variant={activeTab === "submissions" ? "primary" : "secondary"}
-            onClick={() => setActiveTab("submissions")}
-          >
-            📋 Submissions
-            {pendingCount > 0 && (
-              <span className="ml-2 text-xs font-bold">
-                ({pendingCount})
-              </span>
-            )}
-          </Button>
-          <Button
-            size="sm"
-            variant={activeTab === "analytics" ? "primary" : "secondary"}
-            onClick={() => setActiveTab("analytics")}
-          >
-            📈 Analytics
-          </Button>
-        </div>
-      </Card>
     </div>
   );
 }

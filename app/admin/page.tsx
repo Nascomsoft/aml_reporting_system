@@ -815,40 +815,6 @@ export default function AdminPage() {
           </Card>
         </div>
       )}
-
-      {/* Tab Navigation */}
-      <Card className="fixed bottom-8 left-8 right-8 lg:left-auto lg:right-8 lg:w-96">
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            size="sm"
-            variant={activeTab === "overview" ? "primary" : "secondary"}
-            onClick={() => setActiveTab("overview")}
-          >
-            📊 Overview
-          </Button>
-          <Button
-            size="sm"
-            variant={activeTab === "rules" ? "primary" : "secondary"}
-            onClick={() => setActiveTab("rules")}
-          >
-            📋 Rules
-          </Button>
-          <Button
-            size="sm"
-            variant={activeTab === "users" ? "primary" : "secondary"}
-            onClick={() => setActiveTab("users")}
-          >
-            👥 Users
-          </Button>
-          <Button
-            size="sm"
-            variant={activeTab === "institutions" ? "primary" : "secondary"}
-            onClick={() => setActiveTab("institutions")}
-          >
-            🏦 Financial Institutions
-          </Button>
-        </div>
-      </Card>
     </div>
   );
 }
