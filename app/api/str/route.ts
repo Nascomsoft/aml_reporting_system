@@ -52,7 +52,7 @@ export async function GET(request: Request) {
 
     // Fetch user and institution info separately to handle nulls
     const userIds = Array.from(
-      new Set(submissions.map((s) => s.submittedById).filter(Boolean))
+      new Set(submissions.map((s) => s.submittedById).filter((id): id is string => id !== null))
     );
     
     const users = new Map();
@@ -75,7 +75,7 @@ export async function GET(request: Request) {
 
     // Fetch case info for linked cases
     const caseIds = Array.from(
-      new Set(submissions.map((s) => s.caseId).filter(Boolean))
+      new Set(submissions.map((s) => s.caseId).filter((id): id is string => id !== null))
     );
     
     const cases = new Map();
