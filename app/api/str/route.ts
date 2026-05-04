@@ -27,19 +27,21 @@ export async function GET(request: Request) {
     const [submissions, total] = await Promise.all([
       prisma.sTRSubmission.findMany({
         where,
-        include: {
-          submittedBy: {
-            select: {
-              name: true,
-              email: true,
-              institution: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          },
-          case: { select: { caseNumber: true } },
+        select: {
+          id: true,
+          transactionSummary: true,
+          customerName: true,
+          accountNumber: true,
+          descriptionOfSuspicion: true,
+          rulesTriggered: true,
+          narrative: true,
+          riskClassification: true,
+          status: true,
+          transactionIds: true,
+          submittedDate: true,
+          createdAt: true,
+          submittedById: true,
+          caseId: true,
         },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * pageSize,
@@ -48,51 +50,102 @@ export async function GET(request: Request) {
       prisma.sTRSubmission.count({ where }),
     ]);
 
-    const transactionIds = Array.from(
-      new Set(submissions.flatMap((submission) => submission.transactionIds))
+    // Fetch user and institution info separately to handle nulls
+    const userIds = Array.from(
+      new Set(submissions.map((s) => s.submittedById).filter(Boolean))
     );
-
-    const linkedTransactions =
-      transactionIds.length > 0
-        ? await prisma.transaction.findMany({
-            where: {
-              id: {
-                in: transactionIds,
-              },
-            },
+    
+    const users = new Map();
+    if (userIds.length > 0) {
+      const userData = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          institution: {
             select: {
-              id: true,
-              amount: true,
+              name: true,
             },
-          })
-        : [];
+          },
+        },
+      });
+      userData.forEach((u) => users.set(u.id, u));
+    }
 
-    const transactionAmounts = new Map(
-      linkedTransactions.map((transaction) => [transaction.id, transaction.amount])
+    // Fetch case info for linked cases
+    const caseIds = Array.from(
+      new Set(submissions.map((s) => s.caseId).filter(Boolean))
     );
+    
+    const cases = new Map();
+    if (caseIds.length > 0) {
+      const caseData = await prisma.case.findMany({
+        where: { id: { in: caseIds } },
+        select: {
+          id: true,
+          caseNumber: true,
+        },
+      });
+      caseData.forEach((c) => cases.set(c.id, c));
+    }
+
+    const transactionIds = Array.from(
+      new Set(submissions.flatMap((submission) => submission.transactionIds || []))
+    );
+
+    let transactionAmounts = new Map<string, number>();
+    
+    // Try to fetch transactions, but handle errors gracefully
+    if (transactionIds.length > 0) {
+      try {
+        const linkedTransactions = await prisma.transaction.findMany({
+          where: {
+            id: {
+              in: transactionIds,
+            },
+          },
+          select: {
+            id: true,
+            amount: true,
+          },
+        });
+        
+        transactionAmounts = new Map(
+          linkedTransactions.map((transaction) => [transaction.id, transaction.amount])
+        );
+      } catch (err) {
+        // Silently handle transaction lookup errors (e.g., invalid ObjectIDs)
+        console.warn("Warning: Could not fetch linked transactions:", err);
+      }
+    }
 
     return NextResponse.json({
-      submissions: submissions.map((s) => ({
-        id: s.id,
-        transactionSummary: s.transactionSummary,
-        customerName: s.customerName,
-        accountNumber: s.accountNumber,
-        descriptionOfSuspicion: s.descriptionOfSuspicion,
-        rulesTriggered: s.rulesTriggered,
-        narrative: s.narrative,
-        riskClassification: fromSeverity(s.riskClassification),
-        status: fromSTRStatus(s.status),
-        caseNumber: s.case?.caseNumber ?? null,
-        submittedBy: s.submittedBy?.name ?? "",
-        submittingFinancialInstitution:
-          s.submittedBy?.institution?.name ?? "Unassigned Financial Institution",
-        transactionAmount: s.transactionIds.reduce(
-          (sum, transactionId) => sum + (transactionAmounts.get(transactionId) ?? 0),
-          0
-        ),
-        submittedDate: s.submittedDate?.toISOString() ?? null,
-        createdAt: s.createdAt.toISOString(),
-      })),
+      submissions: submissions.map((s) => {
+        const user = s.submittedById ? users.get(s.submittedById) : null;
+        const linkedCase = s.caseId ? cases.get(s.caseId) : null;
+        
+        return {
+          id: s.id,
+          transactionSummary: s.transactionSummary,
+          customerName: s.customerName,
+          accountNumber: s.accountNumber,
+          descriptionOfSuspicion: s.descriptionOfSuspicion,
+          rulesTriggered: s.rulesTriggered,
+          narrative: s.narrative,
+          riskClassification: fromSeverity(s.riskClassification),
+          status: fromSTRStatus(s.status),
+          caseNumber: linkedCase?.caseNumber ?? null,
+          submittedBy: user?.name ?? "System",
+          submittingFinancialInstitution: user?.institution?.name ?? "Unassigned Institution",
+          transactionAmount: (s.transactionIds || []).reduce(
+            (sum, transactionId) => sum + (transactionAmounts.get(transactionId) ?? 0),
+            0
+          ),
+          submittedDate: s.submittedDate?.toISOString() ?? null,
+          createdAt: s.createdAt.toISOString(),
+        };
+      }),
       total,
       page,
       pageSize,
