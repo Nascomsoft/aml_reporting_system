@@ -46,6 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const decoded = decodeClientAuthToken(storedToken);
+      console.log("[AuthContext] Token decoded on init:", {
+        decoded,
+        role: decoded?.role,
+        email: decoded?.email,
+      });
 
       if (!decoded || decoded.exp <= Math.floor(Date.now() / 1000)) {
         clearAuthToken();
@@ -88,6 +93,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = (nextToken: string) => {
     const decoded = decodeClientAuthToken(nextToken);
+
+    console.log("[AuthContext.login] Decoding token:", {
+      decoded,
+      role: decoded?.role,
+      email: decoded?.email,
+    });
 
     if (!decoded || decoded.exp <= Math.floor(Date.now() / 1000)) {
       clearAuthToken();

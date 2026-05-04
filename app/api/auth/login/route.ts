@@ -31,14 +31,27 @@ export async function POST(request: Request) {
       data: { lastLogin: new Date() },
     });
 
+    const convertedRole = fromUserRole(user.role);
+    console.log("[LOGIN ROUTE] Role conversion:", {
+      dbUserRole: user.role,
+      convertedRole,
+      type: typeof convertedRole,
+    });
+
     const authUser = {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: fromUserRole(user.role),
+      role: convertedRole,
       institutionId: user.institutionId,
       institutionName: user.institution?.name ?? null,
     };
+
+    console.log("[LOGIN ROUTE] Auth user being tokenized:", {
+      id: authUser.id,
+      email: authUser.email,
+      role: authUser.role,
+    });
 
     const token = createAuthToken(authUser);
 
