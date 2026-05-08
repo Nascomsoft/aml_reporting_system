@@ -5,6 +5,7 @@ import { handleApiError } from "@/lib/errorHandler";
 import { toSeverity, fromSeverity, fromSTRStatus } from "@/lib/enumMaps";
 import { getSessionUser } from "@/lib/session";
 import { createAuditLog } from "@/lib/auditLog";
+import { isMongoObjectId } from "@/lib/mongo";
 
 export async function GET(request: Request) {
   try {
@@ -99,20 +100,30 @@ export async function GET(request: Request) {
     // Try to fetch transactions, but handle errors gracefully
     if (transactionIds.length > 0) {
       try {
+        const objectIds = transactionIds.filter(isMongoObjectId);
+        const transactionRefs = transactionIds.filter((id) => !isMongoObjectId(id));
+
         const linkedTransactions = await prisma.transaction.findMany({
           where: {
-            id: {
-              in: transactionIds,
-            },
+            OR: [
+              ...(objectIds.length > 0 ? [{ id: { in: objectIds } }] : []),
+              ...(transactionRefs.length > 0
+                ? [{ transactionRef: { in: transactionRefs } }]
+                : []),
+            ],
           },
           select: {
             id: true,
+            transactionRef: true,
             amount: true,
           },
         });
         
         transactionAmounts = new Map(
-          linkedTransactions.map((transaction) => [transaction.id, transaction.amount])
+          linkedTransactions.flatMap((transaction) => [
+            [transaction.id, transaction.amount],
+            [transaction.transactionRef, transaction.amount],
+          ])
         );
       } catch (err) {
         // Silently handle transaction lookup errors (e.g., invalid ObjectIDs)

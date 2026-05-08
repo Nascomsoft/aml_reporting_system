@@ -25,22 +25,22 @@ async function main() {
   // ─── Create Institutions ─────────────────────────────────────────────
   const institutions = await Promise.all([
     prisma.institution.create({
-      data: { name: "Harbor Crest Bank", code: "GTB", region: "Lagos", riskScore: 45, branchCount: 220 },
+      data: { name: "Harbor Crest Bank", code: "HCB", region: "Lagos", riskScore: 45, branchCount: 220 },
     }),
     prisma.institution.create({
-      data: { name: "Summit Gate Bank", code: "ACCESS", region: "Lagos", riskScore: 62, branchCount: 650 },
+      data: { name: "Summit Gate Bank", code: "SGB", region: "Lagos", riskScore: 62, branchCount: 650 },
     }),
     prisma.institution.create({
-      data: { name: "Crown Meridian Bank", code: "ZENITH", region: "South-West", riskScore: 78, branchCount: 480 },
+      data: { name: "Crown Meridian Bank", code: "CMB", region: "South-West", riskScore: 78, branchCount: 480 },
     }),
     prisma.institution.create({
-      data: { name: "Heritage Union Bank", code: "FIRSTBANK", region: "South-South", riskScore: 55, branchCount: 720 },
+      data: { name: "Heritage Union Bank", code: "HUB", region: "South-South", riskScore: 55, branchCount: 720 },
     }),
     prisma.institution.create({
-      data: { name: "Silver Maple Bank", code: "STERLING", region: "North-Central", riskScore: 88, branchCount: 420 },
+      data: { name: "Silver Maple Bank", code: "SMB", region: "North-Central", riskScore: 88, branchCount: 420 },
     }),
     prisma.institution.create({
-      data: { name: "Continental Trust Bank", code: "UBA", region: "North-East", riskScore: 41, branchCount: 580 },
+      data: { name: "Continental Trust Bank", code: "CTB", region: "North-East", riskScore: 41, branchCount: 580 },
     }),
   ]);
   console.log(`  Created ${institutions.length} institutions`);
@@ -359,7 +359,7 @@ async function main() {
         accountNumber: `ACC-${String(1000 + i).padStart(7, "0")}`,
         descriptionOfSuspicion: "Pattern consistent with layering and structuring activities detected through automated monitoring",
         rulesTriggered: [rules[i % rules.length].name, rules[(i + 1) % rules.length].name],
-        transactionIds: [`TXN-${String(i + 1).padStart(6, "0")}`],
+        transactionIds: [createdTxns[i].id],
         behavioralDeviations: ["Unusual transaction volume", "New beneficiary pattern", "Cross-border transfers to high-risk jurisdictions"],
         narrative: "The customer exhibited transaction patterns consistent with money laundering typologies. Multiple deposits were made just below the reporting threshold, followed by rapid wire transfers to offshore accounts.",
         riskClassification: riskClassifications,

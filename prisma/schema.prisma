@@ -87,8 +87,7 @@ model Alert {
   // relations
   caseId          String?        @db.ObjectId
   case            Case?          @relation(fields: [caseId], references: [id])
-  transactions    Transaction[]  @relation("AlertTransactions", fields: [transactionIds], references: [id])
-  transactionIds  String[]       @db.ObjectId
+  transactionIds  String[]       // Reference strings like "TXN-000001", not enforced relation
 
   @@index([severity])
   @@index([lifecycleStage])
@@ -252,9 +251,8 @@ model Transaction {
   metadata        Json?
   createdAt       DateTime          @default(now())
 
-  // relations
-  alerts          Alert[]           @relation("AlertTransactions", fields: [alertIds], references: [id])
-  alertIds        String[]          @db.ObjectId
+  // alertIds stores references to Alerts that flagged this transaction (denormalized for performance)
+  alertIds        String[]       // Reference strings for linked alerts
 
   @@index([accountNumber])
   @@index([date])

@@ -15,6 +15,11 @@ export class AppError extends Error {
 export function handleApiError(error: unknown): NextResponse {
   console.error("[API Error]", error);
 
+  // If the error is already a Response (e.g., from requireRole/requireAuth), return it directly
+  if (error instanceof Response || error instanceof NextResponse) {
+    return error as NextResponse;
+  }
+
   // Zod validation errors
   if (error instanceof ZodError) {
     return NextResponse.json(

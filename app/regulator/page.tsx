@@ -599,6 +599,7 @@ export default function RegulatorPage() {
             <Select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
+              placeholderDisabled={true}
               options={[
                 { value: "all", label: "All Statuses" },
                 { value: "pending", label: "Pending Review" },
