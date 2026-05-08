@@ -155,8 +155,7 @@ async function main() {
       data: {
         name: "High-Risk Country Transfer",
         description: "Transfers involving FATF-listed jurisdictions",
-        ruleType: "THRESHOLD",
-        threshold: 10000,
+        ruleType: "PATTERN",
         severity: "HIGH",
         riskWeight: 4.5,
         createdById: users[0].id,

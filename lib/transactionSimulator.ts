@@ -118,7 +118,7 @@ export function generateRealisticTransaction(
     accountNumber,
     customerName,
     amount,
-    currency: "USD",
+    currency: "NGN",
     transactionType,
     country,
     riskScore: 0, // Will be calculated by rule engine
@@ -141,10 +141,10 @@ function generateAmount(): number {
   if (rand < 0.5) {
     // 50% between 10k-100k
     return Math.floor(Math.random() * 90000) + 10000;
-  } else if (rand < 0.35) {
+  } else if (rand < 0.85) {
     // 35% between 100k-500k
     return Math.floor(Math.random() * 400000) + 100000;
-  } else if (rand < 0.1) {
+  } else if (rand < 0.95) {
     // 10% between 500k-2M
     return Math.floor(Math.random() * 1500000) + 500000;
   } else {

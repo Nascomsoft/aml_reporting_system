@@ -1,4 +1,3 @@
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { verifyAuthToken } from "@/lib/jwt";
 
@@ -12,7 +11,29 @@ export interface SessionUser {
   institutionName: string | null;
 }
 
-async function getBearerToken(): Promise<string | null> {
+async function getBearerToken(request?: Request): Promise<string | null> {
+  if (request) {
+    const authorization = request.headers.get("authorization") || request.headers.get("Authorization");
+
+    if (authorization?.startsWith("Bearer ")) {
+      return authorization.slice(7).trim();
+    }
+
+    const tokenHeader = request.headers.get("x-auth-token");
+    if (tokenHeader) {
+      return tokenHeader.trim();
+    }
+
+    const url = new URL(request.url);
+    const queryToken = url.searchParams.get("authToken");
+    if (queryToken) {
+      return queryToken.trim();
+    }
+
+    return null;
+  }
+
+  const { headers } = await import("next/headers");
   const headerList = await headers();
   const authorization = headerList.get("authorization") || headerList.get("Authorization");
 
@@ -36,8 +57,8 @@ function normalizeRole(role: string): string {
  * Get the current authenticated user from the session.
  * Returns null if not authenticated.
  */
-export async function getSessionUser(): Promise<SessionUser | null> {
-  const token = await getBearerToken();
+export async function getSessionUser(request?: Request): Promise<SessionUser | null> {
+  const token = await getBearerToken(request);
 
   if (!token) {
     return null;
@@ -62,8 +83,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 /**
  * Require authentication. Returns the user or throws a 401 response.
  */
-export async function requireAuth(): Promise<SessionUser> {
-  const user = await getSessionUser();
+export async function requireAuth(request?: Request): Promise<SessionUser> {
+  const user = await getSessionUser(request);
   if (!user) {
     throw NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

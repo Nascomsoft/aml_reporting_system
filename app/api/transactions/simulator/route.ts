@@ -24,7 +24,7 @@ const simulationState: Record<
  */
 export async function POST(request: Request) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
 
     // Only admins can control simulations
     if (user.role !== "admin") {
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
  */
 export async function GET(request: Request) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
 
     // Only allow admins and regulators to view real-time stream
     if (user.role !== "admin" && (user.role !== "regulator" || !user.institutionId)) {

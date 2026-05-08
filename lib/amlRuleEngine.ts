@@ -9,6 +9,20 @@ export interface FlagResult {
   severity?: string;
 }
 
+const highRiskCountries = [
+  "Nigeria",
+  "Pakistan",
+  "Myanmar",
+  "Zimbabwe",
+  "Sudan",
+  "North Korea",
+  "Iran",
+  "Syria",
+  "Cuba",
+  "OFAC",
+  "Sanctioned",
+];
+
 /**
  * Evaluates a transaction against all active AML rules
  * Returns flagging result with risk score calculation
@@ -100,6 +114,12 @@ function evaluateThresholdRule(
   rule: AMLRule,
   transaction: Omit<Transaction, "id" | "createdAt">
 ): boolean {
+  const ruleName = rule.name.toLowerCase();
+
+  if (ruleName.includes("high-risk") || ruleName.includes("country")) {
+    return isHighRiskCountry(transaction.country);
+  }
+
   if (!rule.threshold) return false;
 
   // Check if transaction amount exceeds threshold
@@ -129,19 +149,7 @@ function evaluatePatternRule(
 
   // High-risk country transfers
   if (ruleName.includes("high-risk") || ruleName.includes("country")) {
-    const highRiskCountries = [
-      "North Korea",
-      "Iran",
-      "Syria",
-      "Cuba",
-      "OFAC",
-      "Sanctioned",
-    ];
-    return transaction.country
-      ? highRiskCountries.some((country) =>
-          transaction.country?.toLowerCase().includes(country.toLowerCase())
-        )
-      : false;
+    return isHighRiskCountry(transaction.country);
   }
 
   // Dormant account reactivation
@@ -165,6 +173,16 @@ function evaluatePatternRule(
   }
 
   return false;
+}
+
+function isHighRiskCountry(country?: string | null): boolean {
+  if (!country) {
+    return false;
+  }
+
+  return highRiskCountries.some((highRiskCountry) =>
+    country.toLowerCase().includes(highRiskCountry.toLowerCase())
+  );
 }
 
 /**
