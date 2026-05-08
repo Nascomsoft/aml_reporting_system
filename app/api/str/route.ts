@@ -2,27 +2,24 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { strSubmissionSchema } from "@/lib/validation";
 import { handleApiError } from "@/lib/errorHandler";
-import { toSeverity, fromSeverity, fromSTRStatus } from "@/lib/enumMaps";
-import { getSessionUser } from "@/lib/session";
+import { toSeverity, fromSeverity, fromSTRStatus, toSTRStatus } from "@/lib/enumMaps";
+import { requireAuth } from "@/lib/session";
 import { createAuditLog } from "@/lib/auditLog";
 import { isMongoObjectId } from "@/lib/mongo";
+import { assertCaseAccess, scopedSTRWhere } from "@/lib/workflowAuth";
+import type { Prisma } from "@prisma/client";
 
 export async function GET(request: Request) {
   try {
+    const user = await requireAuth();
     const url = new URL(request.url);
     const page = parseInt(url.searchParams.get("page") || "1", 10);
     const pageSize = parseInt(url.searchParams.get("pageSize") || "20", 10);
     const status = url.searchParams.get("status");
 
-    const where: Record<string, unknown> = {};
+    const where: Prisma.STRSubmissionWhereInput = scopedSTRWhere(user);
     if (status) {
-      const statusMap: Record<string, string> = {
-        draft: "DRAFT",
-        submitted: "SUBMITTED",
-        under_review: "UNDER_REVIEW",
-        closed: "CLOSED",
-      };
-      where.status = statusMap[status] ?? undefined;
+      where.status = toSTRStatus(status);
     }
 
     const [submissions, total] = await Promise.all([
@@ -168,31 +165,63 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const user = await requireAuth();
     const body = await request.json();
     const data = strSubmissionSchema.parse(body);
 
-    const user = await getSessionUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (data.caseId) {
+      const caseRecord = await prisma.case.findUnique({
+        where: { id: data.caseId },
+        include: { linkedAlerts: { select: { institutionId: true } } },
+      });
+      if (!caseRecord) {
+        return NextResponse.json({ error: "Case not found" }, { status: 404 });
+      }
+      assertCaseAccess(user, caseRecord);
     }
 
-    const submission = await prisma.sTRSubmission.create({
-      data: {
-        transactionSummary: data.transactionSummary,
-        customerName: data.customerName,
-        accountNumber: data.accountNumber,
-        descriptionOfSuspicion: data.descriptionOfSuspicion,
-        rulesTriggered: data.rulesTriggered,
-        transactionIds: data.transactionIds,
-        behavioralDeviations: data.behavioralDeviations,
-        narrative: data.narrative,
-        riskClassification: toSeverity(data.riskClassification),
-        supportingDocuments: data.supportingDocuments,
-        status: "SUBMITTED",
-        submittedById: user.id,
-        submittedDate: new Date(),
-        caseId: data.caseId || undefined,
-      },
+    const submission = await prisma.$transaction(async (tx) => {
+      const created = await tx.sTRSubmission.create({
+        data: {
+          transactionSummary: data.transactionSummary,
+          customerName: data.customerName,
+          accountNumber: data.accountNumber,
+          descriptionOfSuspicion: data.descriptionOfSuspicion,
+          rulesTriggered: data.rulesTriggered,
+          transactionIds: data.transactionIds,
+          behavioralDeviations: data.behavioralDeviations,
+          narrative: data.narrative,
+          riskClassification: toSeverity(data.riskClassification),
+          supportingDocuments: data.supportingDocuments,
+          status: "SUBMITTED",
+          submittedById: user.id,
+          submittedDate: new Date(),
+          caseId: data.caseId || undefined,
+        },
+      });
+
+      if (data.caseId) {
+        await tx.case.update({
+          where: { id: data.caseId },
+          data: { status: "STR_SUBMITTED" },
+        });
+
+        await tx.alert.updateMany({
+          where: { caseId: data.caseId },
+          data: { lifecycleStage: "STR_SUBMITTED" },
+        });
+
+        await tx.caseAuditEntry.create({
+          data: {
+            caseId: data.caseId,
+            event: `STR submitted: ${created.id}`,
+            user: user.name,
+            details: data.narrative.slice(0, 500),
+          },
+        });
+      }
+
+      return created;
     });
 
     await createAuditLog({

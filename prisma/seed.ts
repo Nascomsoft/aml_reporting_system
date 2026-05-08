@@ -354,7 +354,7 @@ async function main() {
 
     await prisma.sTRSubmission.create({
       data: {
-        transactionSummary: `Suspicious transactions totaling ETB ${(Math.random() * 1000000).toFixed(0)} identified over a 30-day period`,
+        transactionSummary: `Suspicious transactions totaling NGN ${(Math.random() * 1000000).toFixed(0)} identified over a 30-day period`,
         customerName: c?.customer ?? customerNames[i],
         accountNumber: `ACC-${String(1000 + i).padStart(7, "0")}`,
         descriptionOfSuspicion: "Pattern consistent with layering and structuring activities detected through automated monitoring",
@@ -371,7 +371,92 @@ async function main() {
       },
     });
   }
-  console.log("  Created 7 STR submissions");
+
+  const happyPathCase = cases[0];
+  const happyPathAlerts = alerts.slice(0, 2);
+  const happyPathTransactionIds = Array.from(
+    new Set(happyPathAlerts.flatMap((alert) => alert.transactionIds))
+  );
+
+  await prisma.case.update({
+    where: { id: happyPathCase.id },
+    data: {
+      status: "STR_SUBMITTED",
+      escalationLevel: 2,
+      summary:
+        "End-to-end workflow case: alert triaged, investigation completed, escalated, and submitted as an STR.",
+    },
+  });
+
+  await prisma.alert.updateMany({
+    where: { id: { in: happyPathAlerts.map((alert) => alert.id) } },
+    data: {
+      lifecycleStage: "STR_SUBMITTED",
+      caseId: happyPathCase.id,
+    },
+  });
+
+  await prisma.caseDiscussion.create({
+    data: {
+      caseId: happyPathCase.id,
+      user: users[1].name,
+      message:
+        "Seeded happy path note: linked alerts reviewed and STR submission prepared from case evidence.",
+      timestamp: new Date(Date.now() - 2 * 3600000),
+    },
+  });
+
+  await prisma.caseAuditEntry.createMany({
+    data: [
+      {
+        caseId: happyPathCase.id,
+        event: "Alert linked to case",
+        user: users[1].name,
+        timestamp: new Date(Date.now() - 4 * 3600000),
+      },
+      {
+        caseId: happyPathCase.id,
+        event: "Case escalated to regulator",
+        user: users[1].name,
+        details: "Seeded happy path escalation",
+        timestamp: new Date(Date.now() - 3 * 3600000),
+      },
+      {
+        caseId: happyPathCase.id,
+        event: "STR submitted from case",
+        user: users[1].name,
+        timestamp: new Date(Date.now() - 1 * 3600000),
+      },
+    ],
+  });
+
+  await prisma.sTRSubmission.create({
+    data: {
+      transactionSummary:
+        "Seeded happy-path STR created from two linked alerts and their suspicious transactions.",
+      customerName: happyPathCase.customer,
+      accountNumber: happyPathAlerts[0].accountNumber ?? "ACC-HAPPY-PATH",
+      descriptionOfSuspicion:
+        "Investigation found rapid fund movement and structuring indicators across linked alerts.",
+      rulesTriggered: happyPathAlerts.map((alert) => alert.ruleTriggered),
+      transactionIds: happyPathTransactionIds,
+      behavioralDeviations: [
+        "Alert-driven escalation from new to under review",
+        "Case discussion documented investigation findings",
+        "Escalated case submitted as STR",
+      ],
+      narrative:
+        "This seeded STR demonstrates the persisted alert-to-case-to-STR workflow. The linked alerts were triaged, assigned to a case, discussed by an investigator, escalated, and submitted with transaction references retained.",
+      riskClassification: happyPathCase.riskLevel,
+      supportingDocuments: [],
+      status: "SUBMITTED",
+      caseId: happyPathCase.id,
+      submittedById: users[1].id,
+      submittedDate: new Date(Date.now() - 30 * 60000),
+    },
+  });
+
+  console.log("  Created 8 STR submissions, including one end-to-end happy path");
 
   // ─── Create Activity Logs ───────────────────────────────────────────
   const logActions = ["LOGIN", "ALERT_UPDATE", "CASE_CREATE", "CASE_UPDATE", "STR_SUBMIT", "EXPORT"];

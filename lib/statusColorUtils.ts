@@ -40,12 +40,6 @@ export const getStatusColor = (status: string | undefined | null): "danger" | "w
       return "primary";
     case "closed":
       return "primary";
-    case "accepted":
-      return "success";
-    case "rejected":
-      return "danger";
-    case "in_review":
-      return "warning";
     default:
       return "primary";
   }
@@ -71,8 +65,6 @@ export const getSTRStatusLabel = (status: string | undefined | null): string => 
     draft: "Draft",
     submitted: "Submitted",
     under_review: "Under Review",
-    accepted: "Accepted",
-    rejected: "Rejected",
     closed: "Closed",
   };
   return statusMap[status?.toLowerCase() ?? ""] || formatStatusDisplay(status);

@@ -9,6 +9,7 @@ import {
   getStatusColor,
   getSTRStatusLabel,
 } from "@/lib/statusColorUtils";
+import { authFetch } from "@/lib/auth-client";
 
 interface STRListItem {
   id: string;
@@ -44,7 +45,7 @@ export default function STRPage() {
           ...(statusFilter !== "all" && { status: statusFilter }),
         });
 
-        const resp = await fetch(`/api/str?${params}`);
+        const resp = await authFetch(`/api/str?${params}`);
         const data = await resp.json();
         
         // Filter by search locally if needed
@@ -137,8 +138,6 @@ export default function STRPage() {
                   { value: "draft", label: "Draft" },
                   { value: "submitted", label: "Submitted" },
                   { value: "under_review", label: "Under Review" },
-                  { value: "accepted", label: "Accepted" },
-                  { value: "rejected", label: "Rejected" },
                   { value: "closed", label: "Closed" },
                 ]}
                 fullWidth

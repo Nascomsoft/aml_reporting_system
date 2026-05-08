@@ -24,9 +24,10 @@ interface ManagedAlert extends AlertResponse {
   riskScore: number; // 0-100
   amount: number;
   ruleTriggered: string;
-  lifecycleStage: "new" | "underReview" | "escalated" | "closed";
+  lifecycleStage: "new" | "underReview" | "escalated" | "strSubmitted" | "closed";
   slaRemainingHours: number;
   institution?: string;
+  caseId?: string | null;
 }
 
 interface AlertApiRecord extends AlertResponse {
@@ -34,7 +35,8 @@ interface AlertApiRecord extends AlertResponse {
   riskScore?: number;
   amount?: number;
   ruleTriggered?: string;
-  lifecycleStage?: "new" | "underReview" | "escalated" | "closed";
+  lifecycleStage?: "new" | "underReview" | "escalated" | "strSubmitted" | "closed";
+  caseId?: string | null;
 }
 
 interface FilterState {
@@ -221,6 +223,8 @@ export default function AlertManagement() {
         return "under review";
       case "escalated":
         return "escalated";
+      case "strSubmitted":
+        return "STR submitted";
       default:
         return stage;
     }
@@ -230,13 +234,35 @@ export default function AlertManagement() {
     setTransitioningAlertId(alert.id);
 
     try {
-      await amlAPI.updateAlertLifecycle(alert.id, targetStage);
+      let caseId = alert.caseId ?? null;
+
+      if (targetStage === "underReview" && !caseId) {
+        const result = await amlAPI.createOrLinkCaseFromAlert(alert.id, {
+          note: transitionNotes || "Alert moved to investigation from triage.",
+        });
+        caseId = result.case.id;
+      } else if (targetStage === "escalated") {
+        if (!caseId) {
+          const result = await amlAPI.createOrLinkCaseFromAlert(alert.id, {
+            note: transitionNotes || "Case opened before escalation from alert triage.",
+          });
+          caseId = result.case.id;
+        }
+        await amlAPI.escalateCaseToRegulator(
+          caseId,
+          transitionNotes || "Escalated from alert triage."
+        );
+      } else {
+        await amlAPI.updateAlertLifecycle(alert.id, targetStage);
+      }
+
       setAlerts((currentAlerts) =>
         currentAlerts.map((currentAlert) =>
           currentAlert.id === alert.id
             ? {
                 ...currentAlert,
                 lifecycleStage: targetStage as ManagedAlert["lifecycleStage"],
+                caseId,
               }
             : currentAlert
         )
@@ -247,6 +273,7 @@ export default function AlertManagement() {
           ? {
               ...currentAlert,
               lifecycleStage: targetStage as ManagedAlert["lifecycleStage"],
+              caseId,
             }
           : currentAlert
       );
@@ -265,6 +292,12 @@ export default function AlertManagement() {
       return false;
     } finally {
       setTransitioningAlertId(null);
+    }
+  };
+
+  const openLinkedCase = (caseId?: string | null) => {
+    if (caseId) {
+      router.push(`/case_management/${caseId}`);
     }
   };
 
@@ -299,6 +332,7 @@ export default function AlertManagement() {
       case "new": return "primary";
       case "underReview": return "warning";
       case "escalated": return "danger";
+      case "strSubmitted": return "success";
       case "closed": return "success";
       default: return "primary";
     }
@@ -408,11 +442,11 @@ export default function AlertManagement() {
                     value={filters.lifecycleStage}
                     onChange={(e) => updateFilter("lifecycleStage", e.target.value)}
                     placeholder="All Stages"
-                    placeholderDisabled
                     options={[
                       { value: "new", label: "New" },
                       { value: "underReview", label: "Under Review" },
                       { value: "escalated", label: "Escalated" },
+                      { value: "strSubmitted", label: "STR Submitted" },
                       { value: "closed", label: "Closed" },
                     ]}
                     fullWidth
@@ -598,7 +632,7 @@ export default function AlertManagement() {
                                 void performTransition(alert, "underReview");
                               }}
                             >
-                              Review
+                              Case
                             </Button>
                           )}
                           {alert.lifecycleStage === "underReview" && (
@@ -615,6 +649,19 @@ export default function AlertManagement() {
                               Escalate
                             </Button>
                           )}
+                          {alert.caseId && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openLinkedCase(alert.caseId);
+                              }}
+                            >
+                              Open
+                            </Button>
+                          )}
                         </div>
                       );
                     },
@@ -628,6 +675,91 @@ export default function AlertManagement() {
           </Card>
         </div>
       </div>
+
+      <Modal
+        isOpen={Boolean(selectedAlert) && !showTransitionModal}
+        title={`Alert Details: ${selectedAlert?.id ?? ""}`}
+        onClose={() => setSelectedAlert(null)}
+        footer={
+          selectedAlert ? (
+            <>
+              {selectedAlert.caseId && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => openLinkedCase(selectedAlert.caseId)}
+                >
+                  Open Case
+                </Button>
+              )}
+              {selectedAlert.lifecycleStage === "new" && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  isLoading={transitioningAlertId === selectedAlert.id}
+                  onClick={() => void performTransition(selectedAlert, "underReview")}
+                >
+                  Create Case
+                </Button>
+              )}
+              {selectedAlert.lifecycleStage === "underReview" && (
+                <Button
+                  type="button"
+                  variant="danger"
+                  isLoading={transitioningAlertId === selectedAlert.id}
+                  onClick={() => void performTransition(selectedAlert, "escalated")}
+                >
+                  Escalate Case
+                </Button>
+              )}
+            </>
+          ) : null
+        }
+      >
+        {selectedAlert && (
+          <div className="space-y-4 text-sm">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-text-secondary">Customer</p>
+                <p className="font-semibold text-text-primary">{selectedAlert.customerName}</p>
+              </div>
+              <div>
+                <p className="text-xs text-text-secondary">Risk</p>
+                <Badge variant={getRiskColor(selectedAlert.severity)}>
+                  {selectedAlert.severity.toUpperCase()}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-xs text-text-secondary">Amount</p>
+                <p className="font-semibold text-text-primary">
+                  {formatNGN(selectedAlert.amount)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-text-secondary">Status</p>
+                <Badge variant={getLifecycleColor(selectedAlert.lifecycleStage)}>
+                  {getTransitionLabel(selectedAlert.lifecycleStage)}
+                </Badge>
+              </div>
+              <div className="col-span-2">
+                <p className="text-xs text-text-secondary">Rule Triggered</p>
+                <p className="font-semibold text-text-primary">{selectedAlert.ruleTriggered}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-xs text-text-secondary">Linked Case</p>
+                <p className="font-mono text-text-primary">{selectedAlert.caseId ?? "None"}</p>
+              </div>
+            </div>
+            <textarea
+              value={transitionNotes}
+              onChange={(e) => setTransitionNotes(e.target.value)}
+              placeholder="Add workflow note..."
+              className="input w-full"
+              rows={3}
+            />
+          </div>
+        )}
+      </Modal>
 
       {/* Transition Modal */}
       <Modal

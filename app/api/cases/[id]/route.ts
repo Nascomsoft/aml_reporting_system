@@ -4,17 +4,34 @@ import { caseUpdateSchema } from "@/lib/validation";
 import { handleApiError } from "@/lib/errorHandler";
 import { fromSeverity, fromLifecycle, toLifecycle } from "@/lib/enumMaps";
 import { createCaseAudit } from "@/lib/auditLog";
+import { requireAuth } from "@/lib/session";
+import { assertCaseAccess } from "@/lib/workflowAuth";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await requireAuth();
     const { id } = await params;
     const c = await prisma.case.findUnique({
       where: { id },
       include: {
-        linkedAlerts: { select: { id: true, title: true } },
+        linkedAlerts: {
+          select: {
+            id: true,
+            title: true,
+            severity: true,
+            lifecycleStage: true,
+            riskScore: true,
+            amount: true,
+            customerName: true,
+            accountNumber: true,
+            ruleTriggered: true,
+            institutionId: true,
+            transactionIds: true,
+          },
+        },
         investigator: { select: { name: true } },
       },
     });
@@ -22,6 +39,7 @@ export async function GET(
     if (!c) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
+    assertCaseAccess(user, c);
 
     return NextResponse.json({
       id: c.id,
@@ -36,6 +54,18 @@ export async function GET(
       slaRemainingHours: c.slaRemainingHours,
       overdue: c.overdue,
       summary: c.summary,
+      linkedAlertDetails: c.linkedAlerts.map((alert) => ({
+        id: alert.id,
+        title: alert.title,
+        severity: fromSeverity(alert.severity),
+        lifecycleStage: fromLifecycle(alert.lifecycleStage),
+        riskScore: alert.riskScore,
+        amount: alert.amount,
+        customerName: alert.customerName,
+        accountNumber: alert.accountNumber,
+        ruleTriggered: alert.ruleTriggered,
+        transactionIds: alert.transactionIds,
+      })),
     });
   } catch (error) {
     return handleApiError(error);
@@ -47,9 +77,20 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await requireAuth();
     const { id } = await params;
     const body = await request.json();
     const data = caseUpdateSchema.parse(body);
+
+    const existing = await prisma.case.findUnique({
+      where: { id },
+      include: { linkedAlerts: { select: { institutionId: true } } },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Case not found" }, { status: 404 });
+    }
+    assertCaseAccess(user, existing);
 
     const updateData: Record<string, unknown> = {};
     if (data.status) updateData.status = toLifecycle(data.status);
@@ -65,7 +106,7 @@ export async function PATCH(
     await createCaseAudit({
       caseId: id,
       event: `Case updated: ${Object.keys(updateData).join(", ")}`,
-      user: "system",
+      user: user.name,
     });
 
     return NextResponse.json({

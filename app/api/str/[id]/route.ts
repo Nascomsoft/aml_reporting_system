@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { handleApiError } from "@/lib/errorHandler";
-import { fromSeverity, fromSTRStatus } from "@/lib/enumMaps";
+import { fromSeverity, fromSTRStatus, toSTRStatus } from "@/lib/enumMaps";
 import { isMongoObjectId } from "@/lib/mongo";
+import { requireAuth } from "@/lib/session";
+import { strUpdateSchema } from "@/lib/validation";
+import { assertSTRAccess } from "@/lib/workflowAuth";
+import { createAuditLog } from "@/lib/auditLog";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await requireAuth();
     const { id } = await params;
 
     const submission = await prisma.sTRSubmission.findUnique({
@@ -30,6 +35,8 @@ export async function GET(
         supportingDocuments: true,
         submittedById: true,
         caseId: true,
+        submittedBy: { select: { institutionId: true } },
+        case: { select: { linkedAlerts: { select: { institutionId: true } } } },
       },
     });
 
@@ -39,6 +46,7 @@ export async function GET(
         { status: 404 }
       );
     }
+    assertSTRAccess(authUser, submission);
 
     // Fetch user info separately to handle nulls
     let user = null;
@@ -97,8 +105,18 @@ export async function GET(
       customerName: submission.customerName,
       accountNumber: submission.accountNumber,
       descriptionOfSuspicion: submission.descriptionOfSuspicion,
-      rulesTriggered: submission.rulesTriggered,
-      behavioralDeviations: submission.behavioralDeviations || [],
+      rulesTriggered: submission.rulesTriggered.map((rule) => ({
+        ruleName: rule,
+        severity: fromSeverity(submission.riskClassification),
+        description: "Rule linked to this submitted STR",
+      })),
+      behavioralDeviations: (submission.behavioralDeviations || []).map((deviation) => ({
+        metric: deviation,
+        baseline: "Expected profile",
+        current: "Observed investigation pattern",
+        deviation,
+        riskLevel: fromSeverity(submission.riskClassification),
+      })),
       narrative: submission.narrative,
       riskClassification: fromSeverity(submission.riskClassification),
       status: fromSTRStatus(submission.status),
@@ -119,6 +137,83 @@ export async function GET(
         destination: t.country || "",
       })),
       supportingDocuments: submission.supportingDocuments || [],
+    });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await requireAuth();
+    const { id } = await params;
+    const body = await request.json();
+    const data = strUpdateSchema.parse(body);
+
+    const existing = await prisma.sTRSubmission.findUnique({
+      where: { id },
+      include: {
+        submittedBy: { select: { institutionId: true } },
+        case: { include: { linkedAlerts: { select: { institutionId: true } } } },
+      },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "STR submission not found" }, { status: 404 });
+    }
+    assertSTRAccess(user, existing);
+
+    const nextStatus = data.status ? toSTRStatus(data.status) : existing.status;
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const submission = await tx.sTRSubmission.update({
+        where: { id },
+        data: {
+          transactionSummary: data.transactionSummary,
+          narrative: data.narrative,
+          status: nextStatus,
+        },
+      });
+
+      if (existing.caseId && nextStatus === "CLOSED") {
+        await tx.case.update({
+          where: { id: existing.caseId },
+          data: { status: "CLOSED" },
+        });
+        await tx.alert.updateMany({
+          where: { caseId: existing.caseId },
+          data: { lifecycleStage: "CLOSED" },
+        });
+      }
+
+      if (existing.caseId) {
+        await tx.caseAuditEntry.create({
+          data: {
+            caseId: existing.caseId,
+            event: `STR review status changed to ${nextStatus}`,
+            user: user.name,
+            details: data.reviewNote,
+          },
+        });
+      }
+
+      return submission;
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      action: "STR_UPDATE",
+      resource: "str",
+      resourceId: updated.id,
+      changes: { status: data.status, reviewNote: data.reviewNote },
+    });
+
+    return NextResponse.json({
+      success: true,
+      str: { id: updated.id, status: fromSTRStatus(updated.status) },
     });
   } catch (error) {
     return handleApiError(error);

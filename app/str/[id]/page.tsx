@@ -6,6 +6,7 @@ import {
   Card,
   Badge,
   AlertBanner,
+  Button,
 } from "@/components";
 import { formatDateNG, formatNGN, formatDateTimeNG } from "@/lib/localization";
 import {
@@ -14,6 +15,7 @@ import {
   getSTRStatusLabel,
   getSeverityLabel,
 } from "@/lib/statusColorUtils";
+import { authFetch } from "@/lib/auth-client";
 
 interface TransactionDetail {
   id: string;
@@ -65,6 +67,7 @@ export default function STRDetail() {
   const [strData, setStrData] = useState<STRDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   // Load STR details
   useEffect(() => {
@@ -74,7 +77,7 @@ export default function STRDetail() {
       try {
         setLoading(true);
         setError(null);
-        const resp = await fetch(`/api/str/${strId}`);
+        const resp = await authFetch(`/api/str/${strId}`);
         
         if (!resp.ok) {
           if (resp.status === 404) {
@@ -97,6 +100,30 @@ export default function STRDetail() {
 
     fetchSTRDetails();
   }, [strId]);
+
+  const reviewSTR = async (status: "under_review" | "closed") => {
+    if (!strData) return;
+    try {
+      setUpdatingStatus(true);
+      const resp = await authFetch(`/api/str/${strData.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, reviewNote: `Status changed to ${status}` }),
+      });
+
+      if (!resp.ok) {
+        setError("Failed to update STR review status");
+        return;
+      }
+
+      setStrData({ ...strData, status });
+    } catch (err) {
+      console.error("Error updating STR:", err);
+      setError("Failed to update STR review status");
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -390,6 +417,30 @@ export default function STRDetail() {
                   {formatDateTimeNG(new Date(strData.createdAt))}
                 </p>
               </div>
+            </div>
+            <div className="mt-4 space-y-2">
+              {strData.status === "submitted" && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  fullWidth
+                  isLoading={updatingStatus}
+                  onClick={() => reviewSTR("under_review")}
+                >
+                  Start Review
+                </Button>
+              )}
+              {strData.status === "under_review" && (
+                <Button
+                  variant="success"
+                  size="sm"
+                  fullWidth
+                  isLoading={updatingStatus}
+                  onClick={() => reviewSTR("closed")}
+                >
+                  Close STR
+                </Button>
+              )}
             </div>
           </Card>
 

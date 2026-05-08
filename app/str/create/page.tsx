@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
   Badge,
   Button,
-  FormInput,
   AlertBanner,
   Modal,
 } from "@/components";
@@ -51,6 +50,8 @@ interface BehavioralDeviation {
 
 interface STRDraft {
   id: string;
+  caseId?: string;
+  caseNumber?: string;
   transactionSummary: TransactionSummary;
   rulesTriggered: RuleTriggered[];
   behavioralDeviations: BehavioralDeviation[];
@@ -59,7 +60,7 @@ interface STRDraft {
   submissionDate?: string;
   receiptId?: string;
   trackingNumber?: string;
-  lifecycle: "draft" | "submitted" | "in_review" | "accepted" | "rejected";
+  lifecycle: "draft" | "submitted" | "under_review" | "closed";
   regulatorStatus?: string;
 }
 
@@ -73,6 +74,8 @@ const STR_STEPS = [
 
 export default function CreateSTR() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const caseId = searchParams.get("caseId");
   const [currentStep, setCurrentStep] = useState(1);
   const [strDraft, setStrDraft] = useState<STRDraft>({
     id: "STR-2026-0001",
@@ -133,15 +136,84 @@ export default function CreateSTR() {
     lifecycle: "draft",
   });
 
-  const [showPreview, setShowPreview] = useState(false);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
-  const [verificationCode, setVerificationCode] = useState("");
   const [signatureAgreed, setSignatureAgreed] = useState(false);
   const [submissionReceipt, setSubmissionReceipt] = useState<{
     receiptId: string;
     trackingNumber: string;
     submissionTime: string;
   } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadCaseContext() {
+      if (!caseId) return;
+
+      try {
+        setLoadError(null);
+        const resp = await fetch(`/api/cases/${encodeURIComponent(caseId)}`);
+        if (!resp.ok) {
+          setLoadError("Could not load linked case context.");
+          return;
+        }
+
+        const caseRecord = await resp.json();
+        const primaryAlert = caseRecord.linkedAlertDetails?.[0];
+        const transactionId = primaryAlert?.transactionIds?.[0] ?? caseRecord.id;
+        const amount = primaryAlert?.amount ?? 0;
+        const risk = primaryAlert?.severity ?? caseRecord.riskLevel ?? "medium";
+
+        setStrDraft((current) => ({
+          ...current,
+          caseId: caseRecord.id,
+          caseNumber: caseRecord.caseNumber,
+          transactionSummary: {
+            transactionId,
+            amount,
+            currency: "NGN",
+            date: new Date().toISOString().slice(0, 10),
+            origin: primaryAlert?.accountNumber ?? "Linked account",
+            destination: primaryAlert?.customerName ?? caseRecord.customer,
+            accountHolder: caseRecord.customer,
+            accountNumber: primaryAlert?.accountNumber ?? "UNKNOWN",
+            transactionType: "Linked alert transaction",
+          },
+          rulesTriggered:
+            caseRecord.linkedAlertDetails?.map((alert: {
+              id: string;
+              ruleTriggered: string;
+              severity: "low" | "medium" | "high" | "critical";
+              title: string;
+              riskScore: number;
+            }) => ({
+              ruleId: alert.id,
+              ruleName: alert.ruleTriggered,
+              severity: alert.severity,
+              description: alert.title,
+              threshold: "Rule threshold",
+              violationDetails: `Risk score ${alert.riskScore}`,
+            })) ?? current.rulesTriggered,
+          behavioralDeviations: [
+            {
+              metric: "Case risk profile",
+              baseline: "Normal customer behavior",
+              current: `${String(risk).toUpperCase()} risk investigation`,
+              deviation: "Alert-driven escalation",
+              riskLevel: String(risk).charAt(0).toUpperCase() + String(risk).slice(1),
+            },
+          ],
+          suspicionNarrative:
+            caseRecord.summary ??
+            `Case ${caseRecord.caseNumber} was escalated for STR submission after investigation of linked suspicious activity alerts.`,
+        }));
+      } catch (err) {
+        console.error("Failed to load STR case context:", err);
+        setLoadError("Could not load linked case context.");
+      }
+    }
+
+    void loadCaseContext();
+  }, [caseId]);
 
   const generateReceiptDetails = () => {
     const timestamp = Date.now();
@@ -185,7 +257,7 @@ export default function CreateSTR() {
       case 3:
         return strDraft.suspicionNarrative.trim().length >= 50; // At least 50 chars
       case 4:
-        return strDraft.evidence.length > 0; // At least one file
+        return true;
       case 5:
         return signatureAgreed; // Signature agreed
       default:
@@ -234,6 +306,7 @@ export default function CreateSTR() {
           narrative: strDraft.suspicionNarrative,
           riskClassification: riskClassification,
           supportingDocuments: strDraft.evidence.map((e) => e.name),
+          caseId: strDraft.caseId,
         }),
       });
 
@@ -254,11 +327,10 @@ export default function CreateSTR() {
         submissionDate: receipt.submissionTime,
       });
       setShowSubmitModal(false);
-      setVerificationCode("");
 
       // Redirect to list page after successful submission
       setTimeout(() => {
-        router.push(`/str`);
+        router.push(`/str/${result.id}`);
       }, 2000);
     } catch (err) {
       console.error("STR API error:", err);
@@ -297,6 +369,22 @@ export default function CreateSTR() {
         />
       )}
 
+      {loadError && (
+        <AlertBanner
+          type="warning"
+          title="Case context unavailable"
+          message={loadError}
+        />
+      )}
+
+      {strDraft.caseNumber && (
+        <AlertBanner
+          type="info"
+          title="Case-linked STR"
+          message={`Prefilled from ${strDraft.caseNumber}. Submission will update the linked case and alerts.`}
+        />
+      )}
+
       {/* Lifecycle Status */}
       {strDraft.lifecycle !== "draft" && (
         <Card>
@@ -307,7 +395,7 @@ export default function CreateSTR() {
                 variant={
                   strDraft.lifecycle === "submitted"
                     ? "primary"
-                    : strDraft.lifecycle === "in_review"
+                    : strDraft.lifecycle === "under_review"
                     ? "warning"
                     : "success"
                 }
@@ -612,9 +700,9 @@ export default function CreateSTR() {
 
               {strDraft.evidence.length === 0 && (
                 <AlertBanner
-                  type="warning"
+                  type="info"
                   title="No Evidence Uploaded"
-                  message="At least one supporting document is required to proceed"
+                  message="Supporting documents can be added now or attached later in the case record."
                 />
               )}
             </Card>

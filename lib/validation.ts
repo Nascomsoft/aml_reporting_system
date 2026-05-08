@@ -19,6 +19,12 @@ export const alertUpdateSchema = z.object({
   lifecycleStage: z.enum(["new", "underReview", "escalated", "strSubmitted", "closed"]),
 });
 
+export const alertCaseTransitionSchema = z.object({
+  caseId: z.string().optional(),
+  summary: z.string().optional(),
+  note: z.string().optional(),
+});
+
 // ─── Case Schemas ────────────────────────────────────────────────────────────
 
 export const caseUpdateSchema = z.object({
@@ -56,6 +62,7 @@ export const strUpdateSchema = z.object({
   transactionSummary: z.string().optional(),
   narrative: z.string().optional(),
   status: z.enum(["draft", "submitted", "under_review", "closed"]).optional(),
+  reviewNote: z.string().optional(),
 });
 
 // ─── Rule Schemas ────────────────────────────────────────────────────────────

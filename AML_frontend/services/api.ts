@@ -45,6 +45,8 @@ export interface AlertResponse {
   slsRemaining: number; // in hours
   institution?: string;
   timestamp: string;
+  lifecycleStage?: 'new' | 'underReview' | 'escalated' | 'strSubmitted' | 'closed';
+  caseId?: string | null;
 }
 
 export interface AlertsListResponse {
@@ -201,6 +203,19 @@ export interface CaseRecord {
   complianceDeadline: string;
   slaRemainingHours: number;
   overdue: boolean;
+  summary?: string | null;
+  linkedAlertDetails?: Array<{
+    id: string;
+    title: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    lifecycleStage: 'new' | 'underReview' | 'escalated' | 'strSubmitted' | 'closed';
+    riskScore: number;
+    amount: number;
+    customerName: string;
+    accountNumber: string | null;
+    ruleTriggered: string;
+    transactionIds: string[];
+  }>;
 }
 
 export interface CaseDiscussionResponse {
@@ -283,6 +298,19 @@ export const amlAPI = {
       body: JSON.stringify({ lifecycleStage }),
     });
     if (!response.ok) throw new Error("Failed to update alert");
+  },
+
+  createOrLinkCaseFromAlert: async (
+    id: string,
+    payload: { caseId?: string; summary?: string; note?: string } = {}
+  ): Promise<{ case: { id: string; caseNumber: string; status: string } }> => {
+    const response = await fetch(`${API_BASE_URL}/alerts/${encodeURIComponent(id)}/case`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) throw new Error('Failed to create or link case');
+    return response.json();
   },
 
   /**

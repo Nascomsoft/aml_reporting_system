@@ -84,14 +84,13 @@ export default function CaseDetail() {
         setCaseData(data);
         
         const disc = await amlAPI.getCaseDiscussion(data.id);
-        setDiscussion(
-          disc.entries.map((e: any) => `${e.user}: ${e.message}`)
-        );
+        setDiscussion(disc.entries.map((entry) => `${entry.user}: ${entry.message}`));
         
         const aud = await amlAPI.getCaseAudit(data.id);
         setAudit(
           aud.timeline.map(
-            (t: any) => `${t.timestamp} ${t.user} ${t.event}`
+            (timelineEntry) =>
+              `${timelineEntry.timestamp} ${timelineEntry.user} ${timelineEntry.event}`
           )
         );
       } catch (err) {
@@ -118,7 +117,10 @@ export default function CaseDetail() {
   const escalateToSTR = async () => {
     if (!caseData) return;
     try {
-      await updateStatus("escalated");
+      await amlAPI.escalateCaseToRegulator(
+        caseData.id,
+        "Escalated from case investigation workspace."
+      );
       setCaseData({
         ...caseData,
         status: "escalated",
@@ -130,6 +132,12 @@ export default function CaseDetail() {
       ]);
     } catch (err) {
       console.error("Error escalating case:", err);
+    }
+  };
+
+  const createSTRFromCase = () => {
+    if (caseData) {
+      router.push(`/str/create?caseId=${encodeURIComponent(caseData.id)}`);
     }
   };
 
@@ -302,7 +310,7 @@ export default function CaseDetail() {
                     label: "New",
                   },
                   {
-                    value: "underreview",
+                    value: "underReview",
                     label: "Under Review",
                   },
                   {
@@ -310,7 +318,7 @@ export default function CaseDetail() {
                     label: "Escalated",
                   },
                   {
-                    value: "strsubmitted",
+                    value: "strSubmitted",
                     label: "STR Submitted",
                   },
                   {
@@ -395,6 +403,17 @@ export default function CaseDetail() {
                   }
                 >
                   Escalate to STR
+                </Button>
+                <Button
+                  variant="success"
+                  size="sm"
+                  fullWidth
+                  onClick={createSTRFromCase}
+                  disabled={
+                    caseData.status?.toLowerCase() !== "escalated"
+                  }
+                >
+                  Create STR
                 </Button>
               </div>
             </div>
@@ -490,6 +509,35 @@ export default function CaseDetail() {
 
         {/* Right Column: Audit Timeline */}
         <div className="lg:col-span-1">
+          <Card className="mb-6">
+            <h4 className="heading-6 text-primary m-0 mb-4">
+              Linked Alerts
+            </h4>
+            <div className="space-y-3 max-h-72 overflow-y-auto">
+              {caseData.linkedAlertDetails && caseData.linkedAlertDetails.length > 0 ? (
+                caseData.linkedAlertDetails.map((alert) => (
+                  <div
+                    key={alert.id}
+                    className="rounded border border-border bg-bg-secondary p-3 text-xs"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-text-primary">{alert.title}</p>
+                      <Badge variant={getRiskColor(alert.severity)}>
+                        {alert.severity.toUpperCase()}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-text-secondary">
+                      {alert.ruleTriggered}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-text-tertiary italic">
+                  No linked alert details available.
+                </p>
+              )}
+            </div>
+          </Card>
           <Card>
             <h4 className="heading-6 text-primary m-0 mb-4">
               Audit Timeline

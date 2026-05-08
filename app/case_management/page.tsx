@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Card, Badge, FormInput, Select, AlertBanner } from "@/components";
+import { Card, Badge, FormInput, Select } from "@/components";
 import { formatDateNG } from "@/lib/localization";
+import { authFetch } from "@/lib/auth-client";
 
 interface CaseListItem {
   id: string;
@@ -86,7 +87,7 @@ export default function CaseManagement() {
           ...(statusFilter !== "all" && { status: statusFilter }),
         });
 
-        const resp = await fetch(`/api/cases?${params}`);
+        const resp = await authFetch(`/api/cases?${params}`);
         const data = await resp.json();
         setCases(data.cases || []);
         setTotalCases(data.total || 0);
@@ -180,9 +181,9 @@ export default function CaseManagement() {
                 options={[
                   { value: "all", label: "All Statuses" },
                   { value: "new", label: "New" },
-                  { value: "underreview", label: "Under Review" },
+                  { value: "underReview", label: "Under Review" },
                   { value: "escalated", label: "Escalated" },
-                  { value: "strsubmitted", label: "STR Submitted" },
+                  { value: "strSubmitted", label: "STR Submitted" },
                   { value: "closed", label: "Closed" },
                 ]}
                 fullWidth

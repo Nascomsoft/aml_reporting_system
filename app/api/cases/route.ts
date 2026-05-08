@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { handleApiError } from "@/lib/errorHandler";
-import { fromSeverity, fromLifecycle } from "@/lib/enumMaps";
+import { fromSeverity, fromLifecycle, toSeverity, toLifecycle } from "@/lib/enumMaps";
+import { requireAuth } from "@/lib/session";
+import { scopedCaseWhere } from "@/lib/workflowAuth";
+import type { Prisma } from "@prisma/client";
 
 export async function GET(request: Request) {
   try {
+    const user = await requireAuth();
     const url = new URL(request.url);
     const page = parseInt(url.searchParams.get("page") || "1", 10);
     const pageSize = parseInt(url.searchParams.get("pageSize") || "20", 10);
@@ -13,7 +17,7 @@ export async function GET(request: Request) {
     const status = url.searchParams.get("status");
 
     // Build filter conditions
-    const where: Record<string, unknown> = {};
+    const where: Prisma.CaseWhereInput = scopedCaseWhere(user);
     
     if (search) {
       where.OR = [
@@ -23,11 +27,20 @@ export async function GET(request: Request) {
     }
     
     if (riskLevel && riskLevel !== "all") {
-      where.riskLevel = riskLevel.toUpperCase();
+      where.riskLevel = toSeverity(riskLevel);
     }
     
     if (status && status !== "all") {
-      where.status = status.toUpperCase();
+      const statusMap: Record<string, string> = {
+        new: "new",
+        underreview: "underReview",
+        underReview: "underReview",
+        escalated: "escalated",
+        strsubmitted: "strSubmitted",
+        strSubmitted: "strSubmitted",
+        closed: "closed",
+      };
+      where.status = toLifecycle(statusMap[status] ?? status);
     }
 
     const [cases, total] = await Promise.all([
