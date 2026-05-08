@@ -2,7 +2,11 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { amlAPI, CaseRecord } from "../../../AML_frontend/services/api";
+import {
+  amlAPI,
+  CaseRecord,
+  TransactionData,
+} from "../../../AML_frontend/services/api";
 import {
   Card,
   Badge,
@@ -13,6 +17,7 @@ import {
 } from "@/components";
 import {
   formatDateNG,
+  formatDateTimeNG,
 } from "@/lib/localization";
 
 const getRiskColor = (riskLevel: string) => {
@@ -56,6 +61,49 @@ const formatStatusDisplay = (status: string) => {
     .join(" ");
 };
 
+const getTransactionStatusColor = (status: string) => {
+  switch (status?.toLowerCase()) {
+    case "flagged":
+      return "danger";
+    case "under_review":
+      return "warning";
+    case "cleared":
+      return "success";
+    case "normal":
+      return "primary";
+    default:
+      return "primary";
+  }
+};
+
+const formatTransactionStatusDisplay = (status: string) => {
+  return status
+    .replace(/_/g, " ")
+    .replace(/([A-Z])/g, " $1")
+    .trim()
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+};
+
+const getTransactionRiskColor = (riskScore: number) => {
+  if (riskScore >= 80) return "danger";
+  if (riskScore >= 50) return "warning";
+  if (riskScore >= 25) return "primary";
+  return "success";
+};
+
+const formatTransactionAmount = (amount: number, currency: string) => {
+  try {
+    return new Intl.NumberFormat("en-NG", {
+      style: "currency",
+      currency: currency || "USD",
+    }).format(amount);
+  } catch {
+    return `${currency || "USD"} ${amount.toLocaleString()}`;
+  }
+};
+
 export default function CaseDetail() {
   const router = useRouter();
   const params = useParams();
@@ -68,6 +116,8 @@ export default function CaseDetail() {
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState<string>("");
   const [audit, setAudit] = useState<string[]>([]);
+  const [transactionHistory, setTransactionHistory] = useState<TransactionData[]>([]);
+  const [transactionHistoryError, setTransactionHistoryError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -82,17 +132,46 @@ export default function CaseDetail() {
         setError(null);
         const data = await amlAPI.getCase(caseId);
         setCaseData(data);
-        
-        const disc = await amlAPI.getCaseDiscussion(data.id);
-        setDiscussion(disc.entries.map((entry) => `${entry.user}: ${entry.message}`));
-        
-        const aud = await amlAPI.getCaseAudit(data.id);
-        setAudit(
-          aud.timeline.map(
-            (timelineEntry) =>
-              `${timelineEntry.timestamp} ${timelineEntry.user} ${timelineEntry.event}`
-          )
-        );
+
+        const [discussionResult, auditResult, historyResult] = await Promise.allSettled([
+          amlAPI.getCaseDiscussion(data.id),
+          amlAPI.getCaseAudit(data.id),
+          amlAPI.getCaseTransactionHistory(data.id, 5),
+        ]);
+
+        if (discussionResult.status === "fulfilled") {
+          setDiscussion(
+            discussionResult.value.entries.map(
+              (entry) => `${entry.user}: ${entry.message}`
+            )
+          );
+        } else {
+          setDiscussion([]);
+          console.error("Error loading case discussion:", discussionResult.reason);
+        }
+
+        if (auditResult.status === "fulfilled") {
+          setAudit(
+            auditResult.value.timeline.map(
+              (timelineEntry) =>
+                `${timelineEntry.timestamp} ${timelineEntry.user} ${timelineEntry.event}`
+            )
+          );
+        } else {
+          setAudit([]);
+          console.error("Error loading case audit:", auditResult.reason);
+        }
+
+        if (historyResult.status === "fulfilled") {
+          setTransactionHistory(historyResult.value.transactions);
+          setTransactionHistoryError(null);
+        } else {
+          setTransactionHistory([]);
+          setTransactionHistoryError(
+            "Transaction history could not be loaded right now."
+          );
+          console.error("Error loading transaction history:", historyResult.reason);
+        }
       } catch (err) {
         console.error("Error loading case:", err);
         setError("Failed to load case details. Please try again.");
@@ -509,6 +588,97 @@ export default function CaseDetail() {
 
         {/* Right Column: Audit Timeline */}
         <div className="lg:col-span-1">
+          <Card className="mb-6">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h4 className="heading-6 text-primary m-0">
+                  Transaction History
+                </h4>
+                <p className="text-xs text-text-secondary mt-1">
+                  Recent transactions for {caseData.customer}
+                </p>
+              </div>
+              <Badge variant="primary">{transactionHistory.length}</Badge>
+            </div>
+
+            {transactionHistoryError ? (
+              <p className="text-xs text-text-tertiary italic">
+                {transactionHistoryError}
+              </p>
+            ) : transactionHistory.length > 0 ? (
+              <div className="space-y-3 max-h-80 overflow-y-auto">
+                {transactionHistory.map((transaction) => (
+                  <div
+                    key={transaction.id}
+                    className="rounded border border-border bg-bg-secondary p-3 text-xs"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-text-primary">
+                          {formatTransactionAmount(
+                            transaction.amount,
+                            transaction.currency
+                          )}
+                        </p>
+                        <p className="text-text-secondary mt-1">
+                          {transaction.transactionRef}
+                        </p>
+                      </div>
+                      <Badge variant={getTransactionStatusColor(transaction.status)}>
+                        {formatTransactionStatusDisplay(transaction.status)}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-text-secondary">
+                      <div>
+                        <p className="uppercase tracking-wide text-[10px]">Date</p>
+                        <p className="text-text-primary mt-1">
+                          {formatDateTimeNG(transaction.date)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="uppercase tracking-wide text-[10px]">Type</p>
+                        <p className="text-text-primary mt-1">
+                          {transaction.transactionType}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="uppercase tracking-wide text-[10px]">Account</p>
+                        <p className="text-text-primary mt-1 break-all">
+                          {transaction.accountNumber}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="uppercase tracking-wide text-[10px]">Risk</p>
+                        <Badge variant={getTransactionRiskColor(transaction.riskScore)}>
+                          {transaction.riskScore}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      <p className="text-text-secondary">
+                        {transaction.country || "Country not captured"}
+                      </p>
+                      <p className="text-text-secondary">
+                        {transaction.institution.name}
+                      </p>
+                      {transaction.flagReason && (
+                        <p className="text-text-primary bg-bg-primary/60 rounded px-2 py-1 leading-5">
+                          {transaction.flagReason}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-text-tertiary italic">
+                No recent transactions found for this customer.
+              </p>
+            )}
+          </Card>
+
           <Card className="mb-6">
             <h4 className="heading-6 text-primary m-0 mb-4">
               Linked Alerts

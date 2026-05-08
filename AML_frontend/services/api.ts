@@ -226,6 +226,16 @@ export interface CaseAuditResponse {
   timeline: Array<{ event: string; user: string; timestamp: string; ip?: string }>;
 }
 
+export interface CaseTransactionHistoryResponse {
+  transactions: TransactionData[];
+  total: number;
+  limit: number;
+  context: {
+    customerName: string;
+    accountNumbers: string[];
+  };
+}
+
 // ============================================================================
 // API ENDPOINTS
 // ============================================================================
@@ -369,6 +379,18 @@ export const amlAPI = {
   getCaseAudit: async (id: string): Promise<CaseAuditResponse> => {
     const response = await fetch(`${API_BASE_URL}/cases/${encodeURIComponent(id)}/audit`);
     if (!response.ok) throw new Error('Failed to fetch audit timeline');
+    return response.json();
+  },
+
+  getCaseTransactionHistory: async (
+    id: string,
+    limit: number = 5
+  ): Promise<CaseTransactionHistoryResponse> => {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    const response = await fetch(
+      `${API_BASE_URL}/cases/${encodeURIComponent(id)}/transactions?${params}`
+    );
+    if (!response.ok) throw new Error('Failed to fetch case transaction history');
     return response.json();
   },
 
