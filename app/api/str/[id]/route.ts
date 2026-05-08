@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { handleApiError } from "@/lib/errorHandler";
 import { fromSeverity, fromSTRStatus } from "@/lib/enumMaps";
+import { isMongoObjectId } from "@/lib/mongo";
 
 export async function GET(
   request: Request,
@@ -71,11 +72,17 @@ export async function GET(
     let linkedTransactions: Awaited<ReturnType<typeof prisma.transaction.findMany>> = [];
     if (submission.transactionIds && submission.transactionIds.length > 0) {
       try {
+        const objectIds = submission.transactionIds.filter(isMongoObjectId);
+        const transactionRefs = submission.transactionIds.filter((id) => !isMongoObjectId(id));
+
         linkedTransactions = await prisma.transaction.findMany({
           where: {
-            id: {
-              in: submission.transactionIds,
-            },
+            OR: [
+              ...(objectIds.length > 0 ? [{ id: { in: objectIds } }] : []),
+              ...(transactionRefs.length > 0
+                ? [{ transactionRef: { in: transactionRefs } }]
+                : []),
+            ],
           },
         });
       } catch (err) {
@@ -104,6 +111,7 @@ export async function GET(
       createdAt: submission.createdAt.toISOString(),
       linkedTransactions: linkedTransactions.map((t) => ({
         id: t.id,
+        transactionRef: t.transactionRef,
         amount: t.amount,
         currency: t.currency,
         date: t.date?.toISOString() ?? null,

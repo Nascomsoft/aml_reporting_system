@@ -28,6 +28,10 @@ async function getBearerToken(): Promise<string | null> {
   return null;
 }
 
+function normalizeRole(role: string): string {
+  return role.trim().toLowerCase();
+}
+
 /**
  * Get the current authenticated user from the session.
  * Returns null if not authenticated.
@@ -71,7 +75,9 @@ export async function requireAuth(): Promise<SessionUser> {
  */
 export async function requireRole(...roles: string[]): Promise<SessionUser> {
   const user = await requireAuth();
-  if (!roles.includes(user.role)) {
+  const allowedRoles = roles.map(normalizeRole);
+
+  if (!allowedRoles.includes(normalizeRole(user.role))) {
     throw NextResponse.json(
       { error: "Forbidden: insufficient permissions" },
       { status: 403 }
