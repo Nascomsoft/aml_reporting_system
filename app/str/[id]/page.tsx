@@ -57,6 +57,7 @@ interface STRDetail {
   createdAt: string;
   linkedTransactions: TransactionDetail[];
   transactionSummary: string;
+  supportingDocuments: string[];
 }
 
 export default function STRDetail() {
@@ -68,6 +69,15 @@ export default function STRDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  const getEvidenceName = (documentPath: string) => {
+    const lastSegment = documentPath.split("/").filter(Boolean).pop();
+    return lastSegment ? decodeURIComponent(lastSegment) : documentPath;
+  };
+
+  const isImageEvidence = (documentPath: string) => /\.(png|jpe?g|gif|webp)$/i.test(documentPath);
+
+  const isPdfEvidence = (documentPath: string) => /\.pdf$/i.test(documentPath);
 
   // Load STR details
   useEffect(() => {
@@ -373,6 +383,49 @@ export default function STRDetail() {
               </div>
             </Card>
           )}
+
+          {/* Supporting Evidence */}
+          <Card>
+            <h3 className="heading-4 text-primary m-0 mb-4">
+              Supporting Evidence
+            </h3>
+            {strData.supportingDocuments && strData.supportingDocuments.length > 0 ? (
+              <div className="space-y-3">
+                {strData.supportingDocuments.map((documentPath, idx) => (
+                  <a
+                    key={`${documentPath}-${idx}`}
+                    href={documentPath}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block p-4 bg-bg-secondary rounded-lg border border-border hover:border-primary transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm text-text-primary break-all">
+                          {isImageEvidence(documentPath)
+                            ? "🖼️"
+                            : isPdfEvidence(documentPath)
+                            ? "📄"
+                            : "📎"} {getEvidenceName(documentPath)}
+                        </p>
+                      </div>
+                      <Badge
+                        variant={isPdfEvidence(documentPath) ? "primary" : "success"}
+                      >
+                        {isPdfEvidence(documentPath) ? "PDF" : isImageEvidence(documentPath) ? "IMAGE" : "FILE"}
+                      </Badge>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <AlertBanner
+                type="info"
+                title="No supporting evidence"
+                message="This STR does not have uploaded evidence attached."
+              />
+            )}
+          </Card>
 
           {/* Description of Suspicion */}
           {strData.descriptionOfSuspicion && (

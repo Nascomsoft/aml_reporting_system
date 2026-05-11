@@ -3,13 +3,39 @@ import { hash } from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+type AccountCustomerRecord = {
+  accountNumber: string | null | undefined;
+  customerName: string | null | undefined;
+};
+
+function assertUniqueAccountCustomerMapping(
+  records: AccountCustomerRecord[],
+  context: string
+) {
+  const accountToCustomer = new Map<string, string>();
+
+  for (const record of records) {
+    if (!record.accountNumber || !record.customerName) continue;
+
+    const existingCustomer = accountToCustomer.get(record.accountNumber);
+    if (existingCustomer && existingCustomer !== record.customerName) {
+      throw new Error(
+        `Seed integrity error in ${context}: account ${record.accountNumber} is mapped to both ${existingCustomer} and ${record.customerName}`
+      );
+    }
+
+    accountToCustomer.set(record.accountNumber, record.customerName);
+  }
+}
+
 async function main() {
   console.log("🌱 Seeding AML database...");
 
-  // Clean existing data
+  // Clean existing data in dependency-safe order.
   await prisma.notification.deleteMany();
   await prisma.reportExport.deleteMany();
   await prisma.activityLog.deleteMany();
+  await prisma.caseAttachment.deleteMany();
   await prisma.caseAuditEntry.deleteMany();
   await prisma.caseDiscussion.deleteMany();
   await prisma.sTRSubmission.deleteMany();
@@ -168,16 +194,33 @@ async function main() {
   const txTypes = ["DEPOSIT", "WITHDRAWAL", "TRANSFER", "WIRE", "CASH", "CHECK"] as const;
   const txStatuses = ["NORMAL", "FLAGGED", "UNDER_REVIEW", "CLEARED"] as const;
   const countries = ["Nigeria", "Ghana", "UK", "USA", "UAE", "Cameroon", "Benin", "Niger"];
-  const customerNames = [
-    "Chioma Okafor", "Emeka Nwosu", "Aisha Yusuf", "Titilayo Adeyemi",
-    "Adebayo Oluwaseun", "Zainab Mohammed", "Ifeanyi Ezekiel", "Hana Okechukwu",
-    "Tunde Adekunle", "Blessing Obi", "Mahmoud Ibrahim", "Hauwa Abubakar",
-    "Olufemi Ogunleye", "Amara Onwuka", "Kayode Adeleke", "Fatima Hassan"
+  const customerProfiles = [
+    { name: "Chioma Okafor", accountNumber: "ACC-0001000" },
+    { name: "Emeka Nwosu", accountNumber: "ACC-0001001" },
+    { name: "Aisha Yusuf", accountNumber: "ACC-0001002" },
+    { name: "Titilayo Adeyemi", accountNumber: "ACC-0001003" },
+    { name: "Adebayo Oluwaseun", accountNumber: "ACC-0001004" },
+    { name: "Zainab Mohammed", accountNumber: "ACC-0001005" },
+    { name: "Ifeanyi Ezekiel", accountNumber: "ACC-0001006" },
+    { name: "Hana Okechukwu", accountNumber: "ACC-0001007" },
+    { name: "Tunde Adekunle", accountNumber: "ACC-0001008" },
+    { name: "Blessing Obi", accountNumber: "ACC-0001009" },
+    { name: "Mahmoud Ibrahim", accountNumber: "ACC-0001010" },
+    { name: "Hauwa Abubakar", accountNumber: "ACC-0001011" },
+    { name: "Olufemi Ogunleye", accountNumber: "ACC-0001012" },
+    { name: "Amara Onwuka", accountNumber: "ACC-0001013" },
+    { name: "Kayode Adeleke", accountNumber: "ACC-0001014" },
+    { name: "Fatima Hassan", accountNumber: "ACC-0001015" },
   ];
+  const customerNames = customerProfiles.map((customer) => customer.name);
+  const accountByCustomer = new Map(
+    customerProfiles.map((customer) => [customer.name, customer.accountNumber])
+  );
 
   const transactions = [];
   for (let i = 0; i < 200; i++) {
     const instIdx = i % institutions.length;
+    const customerProfile = customerProfiles[i % customerProfiles.length];
     const isFlagged = Math.random() > 0.7;
     const amount = isFlagged
       ? Math.floor(Math.random() * 500000) + 50000
@@ -185,8 +228,8 @@ async function main() {
 
     transactions.push({
       transactionRef: `TXN-${String(i + 1).padStart(6, "0")}`,
-      accountNumber: `ACC-${String(1000 + (i % 50)).padStart(7, "0")}`,
-      customerName: customerNames[i % customerNames.length],
+      accountNumber: customerProfile.accountNumber,
+      customerName: customerProfile.name,
       amount,
       currency: "NGN",
       transactionType: txTypes[i % txTypes.length],
@@ -198,6 +241,8 @@ async function main() {
       institutionId: institutions[instIdx].id,
     });
   }
+
+  assertUniqueAccountCustomerMapping(transactions, "transaction payload generation");
 
   const createdTxns = [];
   for (const tx of transactions) {
@@ -220,13 +265,14 @@ async function main() {
   ];
 
   const flaggedTxns = createdTxns.filter((t) => t.status === "FLAGGED");
+  const alertSourceTxns = flaggedTxns.length > 0 ? flaggedTxns : createdTxns;
 
   const alerts = [];
   for (let i = 0; i < 80; i++) {
     const instIdx = i % institutions.length;
     const severityIdx = i < 15 ? 0 : i < 35 ? 1 : i < 60 ? 2 : 3;
     const lifecycleIdx = i < 20 ? 0 : i < 40 ? 1 : i < 55 ? 2 : i < 65 ? 3 : 4;
-    const linkedTx = flaggedTxns[i % flaggedTxns.length];
+    const linkedTx = alertSourceTxns[i % alertSourceTxns.length];
 
     alerts.push(
       await prisma.alert.create({
@@ -350,12 +396,15 @@ async function main() {
     const c = cases[i + 13]; // from STR_SUBMITTED and CLOSED cases
     const statuses = ["SUBMITTED", "UNDER_REVIEW", "CLOSED"] as const;
     const riskClassifications = i < 3 ? "CRITICAL" : "HIGH"; // Must be uppercase enum values for Prisma
+    const strCustomerName = c?.customer ?? customerNames[i];
+    const strAccountNumber =
+      accountByCustomer.get(strCustomerName) ?? customerProfiles[i % customerProfiles.length].accountNumber;
 
     await prisma.sTRSubmission.create({
       data: {
         transactionSummary: `Suspicious transactions totaling NGN ${(Math.random() * 1000000).toFixed(0)} identified over a 30-day period`,
-        customerName: c?.customer ?? customerNames[i],
-        accountNumber: `ACC-${String(1000 + i).padStart(7, "0")}`,
+        customerName: strCustomerName,
+        accountNumber: strAccountNumber,
         descriptionOfSuspicion: "Pattern consistent with layering and structuring activities detected through automated monitoring",
         rulesTriggered: [rules[i % rules.length].name, rules[(i + 1) % rules.length].name],
         transactionIds: [createdTxns[i].id],
@@ -371,6 +420,28 @@ async function main() {
     });
   }
 
+
+    const [transactionMappings, alertMappings, strMappings] = await Promise.all([
+      prisma.transaction.findMany({
+        select: { accountNumber: true, customerName: true },
+      }),
+      prisma.alert.findMany({
+        where: { accountNumber: { not: null } },
+        select: { accountNumber: true, customerName: true },
+      }),
+      prisma.sTRSubmission.findMany({
+        select: { accountNumber: true, customerName: true },
+      }),
+    ]);
+
+    assertUniqueAccountCustomerMapping(transactionMappings, "transactions in database");
+    assertUniqueAccountCustomerMapping(alertMappings, "alerts in database");
+    assertUniqueAccountCustomerMapping(strMappings, "STR submissions in database");
+    assertUniqueAccountCustomerMapping(
+      [...transactionMappings, ...alertMappings, ...strMappings],
+      "combined seeded account/customer records"
+    );
+    console.log("  Verified unique account-to-customer mappings across seeded records");
   const happyPathCase = cases[0];
   const happyPathAlerts = alerts.slice(0, 2);
   const happyPathTransactionIds = Array.from(

@@ -42,6 +42,10 @@ export const caseDiscussionSchema = z.object({
   message: z.string().min(1, "Message cannot be empty"),
 });
 
+export const caseTagSchema = z.object({
+  tag: z.string().trim().min(1, "Tag cannot be empty"),
+});
+
 // ─── STR Schemas ─────────────────────────────────────────────────────────────
 
 export const strSubmissionSchema = z.object({

@@ -148,6 +148,20 @@ The Prisma schema models the main AML entities:
 - `Notification`: user notifications.
 - `ReportExport`: exported reports and related metadata.
 
+## File Attachment Storage
+
+Case attachments and STR supporting evidence are stored in Cloudinary. The shared attachment endpoints under `app/api/cases/[id]/attachments` upload PDFs and images to Cloudinary, persist the returned URL in Prisma, and use the stored Cloudinary public ID when deleting an attachment.
+
+STR draft evidence uploads without a linked case use `app/api/str/evidence`, which also stores files in Cloudinary and returns URLs that are embedded into the STR submission payload.
+
+The deployment requires these environment variables:
+
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+
+This repository no longer depends on writable local disk storage for new attachment uploads, which keeps the workflow compatible with Vercel.
+
 The schema also defines the key enums that shape the user interface (UI) and API behavior:
 
 - `UserRole`

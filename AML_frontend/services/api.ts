@@ -204,6 +204,8 @@ export interface CaseRecord {
   slaRemainingHours: number;
   overdue: boolean;
   summary?: string | null;
+  tags: string[];
+  attachments: CaseAttachmentRecord[];
   linkedAlertDetails?: Array<{
     id: string;
     title: string;
@@ -218,8 +220,30 @@ export interface CaseRecord {
   }>;
 }
 
+export interface CaseAttachmentRecord {
+  id: string;
+  originalName: string;
+  storedName: string;
+  filePath: string;
+  url: string;
+  cloudinaryPublicId?: string | null;
+  cloudinaryResourceType?: string | null;
+  mimeType: string;
+  size: number;
+  uploadedBy: string;
+  createdAt: string;
+}
+
 export interface CaseDiscussionResponse {
   entries: Array<{ user: string; message: string; timestamp: string }>;
+}
+
+export interface CaseTagsResponse {
+  tags: string[];
+}
+
+export interface CaseAttachmentsResponse {
+  attachments: CaseAttachmentRecord[];
 }
 
 export interface CaseAuditResponse {
@@ -330,6 +354,58 @@ export const amlAPI = {
   getCase: async (id: string): Promise<CaseRecord> => {
     const response = await fetch(`${API_BASE_URL}/cases/${encodeURIComponent(id)}`);
     if (!response.ok) throw new Error('Failed to fetch case');
+    return response.json();
+  },
+
+  getCaseTags: async (id: string): Promise<CaseTagsResponse> => {
+    const response = await fetch(`${API_BASE_URL}/cases/${encodeURIComponent(id)}/tags`);
+    if (!response.ok) throw new Error('Failed to fetch case tags');
+    return response.json();
+  },
+
+  addCaseTag: async (id: string, tag: string): Promise<CaseTagsResponse> => {
+    const response = await fetch(`${API_BASE_URL}/cases/${encodeURIComponent(id)}/tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag }),
+    });
+    if (!response.ok) throw new Error('Failed to add case tag');
+    return response.json();
+  },
+
+  deleteCaseTag: async (id: string, tag: string): Promise<CaseTagsResponse> => {
+    const response = await fetch(`${API_BASE_URL}/cases/${encodeURIComponent(id)}/tags`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag }),
+    });
+    if (!response.ok) throw new Error('Failed to delete case tag');
+    return response.json();
+  },
+
+  getCaseAttachments: async (id: string): Promise<CaseAttachmentsResponse> => {
+    const response = await fetch(`${API_BASE_URL}/cases/${encodeURIComponent(id)}/attachments`);
+    if (!response.ok) throw new Error('Failed to fetch case attachments');
+    return response.json();
+  },
+
+  uploadCaseAttachments: async (id: string, files: File[]): Promise<CaseAttachmentsResponse> => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    const response = await fetch(`${API_BASE_URL}/cases/${encodeURIComponent(id)}/attachments`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) throw new Error('Failed to upload case attachment');
+    return response.json();
+  },
+
+  deleteCaseAttachment: async (id: string, attachmentId: string): Promise<CaseAttachmentsResponse> => {
+    const response = await fetch(
+      `${API_BASE_URL}/cases/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`,
+      { method: 'DELETE' }
+    );
+    if (!response.ok) throw new Error('Failed to delete case attachment');
     return response.json();
   },
 

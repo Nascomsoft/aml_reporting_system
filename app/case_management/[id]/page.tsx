@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import {
   amlAPI,
   CaseRecord,
+  CaseAttachmentRecord,
   TransactionData,
 } from "../../../AML_frontend/services/api";
 import {
@@ -112,9 +113,12 @@ export default function CaseDetail() {
   const [caseData, setCaseData] = useState<CaseRecord | null>(null);
   const [discussion, setDiscussion] = useState<string[]>([]);
   const [newMessage, setNewMessage] = useState<string>("");
-  const [attachments, setAttachments] = useState<string[]>([]);
+  const [attachments, setAttachments] = useState<CaseAttachmentRecord[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState<string>("");
+  const [tagSaving, setTagSaving] = useState(false);
+  const [attachmentSaving, setAttachmentSaving] = useState(false);
+  const [caseActionError, setCaseActionError] = useState<string | null>(null);
   const [audit, setAudit] = useState<string[]>([]);
   const [transactionHistory, setTransactionHistory] = useState<TransactionData[]>([]);
   const [transactionHistoryError, setTransactionHistoryError] = useState<string | null>(null);
@@ -139,6 +143,8 @@ export default function CaseDetail() {
           amlAPI.getCaseTransactionHistory(data.id, 5),
         ]);
 
+        setTags(data.tags ?? []);
+        setAttachments(data.attachments ?? []);
         if (discussionResult.status === "fulfilled") {
           setDiscussion(
             discussionResult.value.entries.map(
@@ -224,6 +230,81 @@ export default function CaseDetail() {
     if (hours < 4) return "#dc2626";
     if (hours < 24) return "#ea580c";
     return "#16a34a";
+  };
+
+  const handleAddTag = async () => {
+    if (!caseData) return;
+
+    const tag = newTag.trim();
+    if (!tag) return;
+
+    try {
+      setTagSaving(true);
+      setCaseActionError(null);
+      const response = await amlAPI.addCaseTag(caseData.id, tag);
+      setTags(response.tags);
+      setNewTag("");
+    } catch (err) {
+      console.error("Error adding tag:", err);
+      setCaseActionError("Failed to save the tag. Please try again.");
+    } finally {
+      setTagSaving(false);
+    }
+  };
+
+  const handleRemoveTag = async (tag: string) => {
+    if (!caseData) return;
+
+    try {
+      setTagSaving(true);
+      setCaseActionError(null);
+      const response = await amlAPI.deleteCaseTag(caseData.id, tag);
+      setTags(response.tags);
+    } catch (err) {
+      console.error("Error removing tag:", err);
+      setCaseActionError("Failed to remove the tag. Please try again.");
+    } finally {
+      setTagSaving(false);
+    }
+  };
+
+  const handleAttachmentUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    if (!caseData) return;
+
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+
+    if (files.length === 0) return;
+
+    try {
+      setAttachmentSaving(true);
+      setCaseActionError(null);
+      const response = await amlAPI.uploadCaseAttachments(caseData.id, files);
+      setAttachments(response.attachments);
+    } catch (err) {
+      console.error("Error uploading attachment:", err);
+      setCaseActionError("Failed to upload the attachment. Please try again.");
+    } finally {
+      setAttachmentSaving(false);
+    }
+  };
+
+  const handleRemoveAttachment = async (attachmentId: string) => {
+    if (!caseData) return;
+
+    try {
+      setAttachmentSaving(true);
+      setCaseActionError(null);
+      const response = await amlAPI.deleteCaseAttachment(caseData.id, attachmentId);
+      setAttachments(response.attachments);
+    } catch (err) {
+      console.error("Error removing attachment:", err);
+      setCaseActionError("Failed to remove the attachment. Please try again.");
+    } finally {
+      setAttachmentSaving(false);
+    }
   };
 
   if (loading) {
@@ -500,15 +581,20 @@ export default function CaseDetail() {
             {/* Tags */}
             <div className="mt-6 pt-6 border-t border-border">
               <h5 className="heading-6 text-primary m-0 mb-3">Tags</h5>
+              {caseActionError && (
+                <div className="mb-3">
+                  <AlertBanner type="warning" title="Action failed" message={caseActionError} />
+                </div>
+              )}
               <div className="flex flex-wrap gap-2 mb-3">
                 {tags.map((tag, idx) => (
                   <Badge key={idx} variant="primary">
                     {tag}
                     <button
+                      type="button"
                       className="ml-2 cursor-pointer opacity-70 hover:opacity-100"
-                      onClick={() =>
-                        setTags(tags.filter((_, i) => i !== idx))
-                      }
+                      disabled={tagSaving}
+                      onClick={() => handleRemoveTag(tag)}
                     >
                       ×
                     </button>
@@ -521,19 +607,15 @@ export default function CaseDetail() {
                   onChange={(e) => setNewTag(e.target.value)}
                   placeholder="Add tag"
                   fullWidth
+                  disabled={tagSaving}
                 />
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => {
-                    const tag = newTag.trim();
-                    if (tag) {
-                      setTags([...tags, tag]);
-                      setNewTag("");
-                    }
-                  }}
+                  onClick={handleAddTag}
+                  disabled={tagSaving || newTag.trim().length === 0}
                 >
-                  Add
+                  {tagSaving ? "Saving..." : "Add"}
                 </Button>
               </div>
             </div>
@@ -544,18 +626,29 @@ export default function CaseDetail() {
                 Attachments
               </h5>
               <div className="space-y-2 mb-3">
-                {attachments.map((a, i) => (
+                {attachments.map((attachment) => (
                   <div
-                    key={i}
+                    key={attachment.id}
                     className="flex items-center justify-between bg-bg-secondary p-2 rounded text-sm"
                   >
-                    <span>📎 {a}</span>
+                    <div className="min-w-0 pr-3">
+                      <a
+                        href={attachment.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium text-primary hover:underline break-all"
+                      >
+                        📎 {attachment.originalName}
+                      </a>
+                      <p className="text-xs text-text-secondary mt-1">
+                        {(attachment.size / 1024).toFixed(1)} KB • {attachment.uploadedBy}
+                      </p>
+                    </div>
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() =>
-                        setAttachments(attachments.filter((_, idx) => idx !== i))
-                      }
+                      onClick={() => handleRemoveAttachment(attachment.id)}
+                      disabled={attachmentSaving}
                     >
                       Remove
                     </Button>
@@ -565,23 +658,23 @@ export default function CaseDetail() {
               <input
                 ref={fileInputRef}
                 type="file"
+                multiple
                 className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    setAttachments([...attachments, file.name]);
-                  }
-                  e.target.value = "";
-                }}
+                onChange={handleAttachmentUpload}
+                accept="application/pdf,.pdf"
               />
               <Button
                 size="sm"
                 variant="secondary"
                 fullWidth
                 onClick={() => fileInputRef.current?.click()}
+                disabled={attachmentSaving}
               >
-                📤 Upload Document
+                {attachmentSaving ? "Uploading..." : "📤 Upload Document"}
               </Button>
+              <p className="text-xs text-text-secondary mt-2">
+                PDF files only.
+              </p>
             </div>
           </Card>
         </div>

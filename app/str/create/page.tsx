@@ -48,6 +48,18 @@ interface BehavioralDeviation {
   riskLevel: string;
 }
 
+interface EvidenceItem {
+  name: string;
+  size: number;
+  type: string;
+  attachmentId?: string;
+  cloudinaryPublicId?: string;
+  cloudinaryResourceType?: string;
+  filePath?: string;
+  url?: string;
+  uploaded: boolean;
+}
+
 interface STRDraft {
   id: string;
   caseId?: string;
@@ -56,7 +68,7 @@ interface STRDraft {
   rulesTriggered: RuleTriggered[];
   behavioralDeviations: BehavioralDeviation[];
   suspicionNarrative: string;
-  evidence: Array<{ name: string; size: number; type: string }>;
+  evidence: EvidenceItem[];
   submissionDate?: string;
   receiptId?: string;
   trackingNumber?: string;
@@ -144,6 +156,8 @@ export default function CreateSTR() {
     submissionTime: string;
   } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
+  const [evidenceUploading, setEvidenceUploading] = useState(false);
 
   useEffect(() => {
     async function loadCaseContext() {
@@ -230,22 +244,196 @@ export default function CreateSTR() {
     setStrDraft({ ...strDraft, suspicionNarrative: text });
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    const newEvidence = files.map((f) => ({
-      name: f.name,
-      size: f.size,
-      type: f.type,
-    }));
-    setStrDraft({
-      ...strDraft,
-      evidence: [...strDraft.evidence, ...newEvidence],
-    });
+  const isSupportedEvidenceFile = (file: File) => {
+    const lowerName = file.name.toLowerCase();
+    return (
+      file.type === "application/pdf" ||
+      file.type.startsWith("image/") ||
+      lowerName.endsWith(".pdf") ||
+      lowerName.endsWith(".jpg") ||
+      lowerName.endsWith(".jpeg") ||
+      lowerName.endsWith(".png") ||
+      lowerName.endsWith(".gif") ||
+      lowerName.endsWith(".webp")
+    );
   };
 
-  const removeEvidence = (index: number) => {
-    const updated = strDraft.evidence.filter((_, i) => i !== index);
-    setStrDraft({ ...strDraft, evidence: updated });
+  const mapAttachmentToEvidence = (attachment: {
+    id: string;
+    originalName: string;
+    filePath: string;
+    url: string;
+    cloudinaryPublicId?: string | null;
+    cloudinaryResourceType?: string | null;
+    mimeType: string;
+    size: number;
+  }): EvidenceItem => ({
+    attachmentId: attachment.id,
+    name: attachment.originalName,
+    size: attachment.size,
+    type: attachment.mimeType,
+    filePath: attachment.filePath,
+    url: attachment.url,
+    cloudinaryPublicId: attachment.cloudinaryPublicId ?? undefined,
+    cloudinaryResourceType: attachment.cloudinaryResourceType ?? undefined,
+    uploaded: true,
+  });
+
+  const mapDraftEvidenceToEvidence = (attachment: {
+    id: string;
+    originalName: string;
+    filePath: string;
+    url: string;
+    cloudinaryPublicId: string;
+    cloudinaryResourceType: string;
+    mimeType: string;
+    size: number;
+  }): EvidenceItem => ({
+    attachmentId: attachment.id,
+    cloudinaryPublicId: attachment.cloudinaryPublicId,
+    cloudinaryResourceType: attachment.cloudinaryResourceType,
+    name: attachment.originalName,
+    size: attachment.size,
+    type: attachment.mimeType,
+    filePath: attachment.filePath,
+    url: attachment.url,
+    uploaded: true,
+  });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+
+    if (files.length === 0) {
+      return;
+    }
+
+    const invalidFiles = files.filter((file) => !isSupportedEvidenceFile(file));
+    if (invalidFiles.length > 0) {
+      setEvidenceError(
+        `Unsupported file type: ${invalidFiles.map((file) => file.name).join(", ")}. Use PDF or image files.`
+      );
+      return;
+    }
+
+    setEvidenceError(null);
+
+    const uploadFormData = new FormData();
+    files.forEach((file) => uploadFormData.append("files", file));
+
+    try {
+      setEvidenceUploading(true);
+      const response = caseId
+        ? await fetch(`/api/cases/${encodeURIComponent(caseId)}/attachments`, {
+            method: "POST",
+            body: uploadFormData,
+          })
+        : await fetch(`/api/str/evidence`, {
+            method: "POST",
+            body: uploadFormData,
+          });
+
+      if (!response.ok) {
+        const errorResponse = await response.json().catch(() => ({}));
+        throw new Error(errorResponse.error || "Failed to upload supporting evidence");
+      }
+
+      const result = await response.json();
+      const uploadedEvidence = (result.attachments || []).map((attachment: {
+        id: string;
+        originalName: string;
+        filePath: string;
+        url: string;
+        cloudinaryPublicId?: string;
+        cloudinaryResourceType?: string;
+        mimeType: string;
+        size: number;
+      }) =>
+        caseId ? mapAttachmentToEvidence(attachment) : mapDraftEvidenceToEvidence({
+          ...attachment,
+          cloudinaryPublicId: attachment.cloudinaryPublicId ?? attachment.id,
+          cloudinaryResourceType: attachment.cloudinaryResourceType ?? "image",
+        })
+      );
+
+      setStrDraft((current) => ({
+        ...current,
+        evidence: [...current.evidence, ...uploadedEvidence],
+      }));
+    } catch (error) {
+      console.error("Evidence upload failed:", error);
+      setEvidenceError(
+        error instanceof Error ? error.message : "Failed to upload supporting evidence"
+      );
+    } finally {
+      setEvidenceUploading(false);
+    }
+  };
+
+  const removeEvidence = async (index: number) => {
+    const evidenceItem = strDraft.evidence[index];
+
+    if (!evidenceItem) {
+      return;
+    }
+
+    if (evidenceItem.uploaded && evidenceItem.attachmentId && caseId) {
+      try {
+        setEvidenceUploading(true);
+        const response = await fetch(
+          `/api/cases/${encodeURIComponent(caseId)}/attachments/${encodeURIComponent(evidenceItem.attachmentId)}`,
+          { method: "DELETE" }
+        );
+
+        if (!response.ok) {
+          const errorResponse = await response.json().catch(() => ({}));
+          throw new Error(errorResponse.error || "Failed to remove supporting evidence");
+        }
+
+        const result = await response.json();
+        setStrDraft((current) => ({
+          ...current,
+          evidence: (result.attachments || []).map(mapAttachmentToEvidence),
+        }));
+        return;
+      } catch (error) {
+        console.error("Failed to remove evidence:", error);
+        setEvidenceError(
+          error instanceof Error ? error.message : "Failed to remove supporting evidence"
+        );
+      } finally {
+        setEvidenceUploading(false);
+      }
+    } else if (evidenceItem.uploaded && evidenceItem.cloudinaryPublicId) {
+      try {
+        setEvidenceUploading(true);
+        const response = await fetch(`/api/str/evidence`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            publicId: evidenceItem.cloudinaryPublicId,
+            resourceType: evidenceItem.cloudinaryResourceType || "image",
+          }),
+        });
+
+        if (!response.ok) {
+          const errorResponse = await response.json().catch(() => ({}));
+          throw new Error(errorResponse.error || "Failed to remove supporting evidence");
+        }
+      } catch (error) {
+        console.error("Failed to remove evidence:", error);
+        setEvidenceError(
+          error instanceof Error ? error.message : "Failed to remove supporting evidence"
+        );
+      } finally {
+        setEvidenceUploading(false);
+      }
+    }
+
+    setStrDraft((current) => ({
+      ...current,
+      evidence: current.evidence.filter((_, i) => i !== index),
+    }));
   };
 
   const canProceedToNext = () => {
@@ -305,7 +493,7 @@ export default function CreateSTR() {
           behavioralDeviations: strDraft.behavioralDeviations.map((bd) => `${bd.metric}: ${bd.deviation} (${bd.riskLevel})`),
           narrative: strDraft.suspicionNarrative,
           riskClassification: riskClassification,
-          supportingDocuments: strDraft.evidence.map((e) => e.name),
+          supportingDocuments: strDraft.evidence.map((e) => e.filePath || e.url || e.name),
           caseId: strDraft.caseId,
         }),
       });
@@ -374,6 +562,14 @@ export default function CreateSTR() {
           type="warning"
           title="Case context unavailable"
           message={loadError}
+        />
+      )}
+
+      {evidenceError && (
+        <AlertBanner
+          type="warning"
+          title="Evidence upload"
+          message={evidenceError}
         />
       )}
 
@@ -649,9 +845,16 @@ export default function CreateSTR() {
                 Supporting Evidence
               </h3>
               <p className="text-sm text-text-secondary mb-4">
-                Upload documents, screenshots, or other evidence supporting
-                your suspicion.
+                Upload PDF or image evidence supporting your suspicion.
               </p>
+
+              {!caseId && (
+                <AlertBanner
+                  type="info"
+                  title="Cloudinary draft storage"
+                  message="Supporting evidence is uploaded to Cloudinary and will be included in the STR submission."
+                />
+              )}
 
               <label className="flex items-center justify-center p-8 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary transition-colors">
                 <input
@@ -660,14 +863,14 @@ export default function CreateSTR() {
                   onChange={handleFileUpload}
                   disabled={isReadOnly}
                   className="hidden"
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx"
+                  accept="image/*,.pdf"
                 />
                 <div className="text-center">
                   <p className="text-base font-semibold text-primary mb-1">
                     📤 Drag files here or click to select
                   </p>
                   <p className="text-xs text-text-secondary">
-                    PDF, images, documents up to 10MB each
+                    PDF and image files up to 10MB each
                   </p>
                 </div>
               </label>
@@ -682,13 +885,19 @@ export default function CreateSTR() {
                       key={idx}
                       className="flex items-center justify-between p-3 bg-bg-secondary rounded-lg"
                     >
-                      <p className="text-sm">
-                        📄 {file.name} ({(file.size / 1024).toFixed(1)} KB)
-                      </p>
+                      <div>
+                        <p className="text-sm">
+                          {file.type.startsWith("image/") ? "🖼️" : "📄"} {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                        </p>
+                        <p className="text-xs text-text-secondary mt-1">
+                          {file.uploaded ? "Uploaded to cloud storage" : "Pending upload"}
+                        </p>
+                      </div>
                       {!isReadOnly && (
                         <button
-                          onClick={() => removeEvidence(idx)}
+                          onClick={() => void removeEvidence(idx)}
                           className="text-danger-600 hover:text-danger-700 text-sm font-semibold"
+                          disabled={evidenceUploading}
                         >
                           Remove
                         </button>
@@ -915,7 +1124,7 @@ export default function CreateSTR() {
                   variant="success"
                   size="sm"
                   onClick={() => setShowSubmitModal(true)}
-                  disabled={!signatureAgreed}
+                  disabled={!signatureAgreed || evidenceUploading}
                   fullWidth
                 >
                   🚀 Submit STR
@@ -942,7 +1151,7 @@ export default function CreateSTR() {
             <Button
               variant="success"
               onClick={submitSTR}
-              disabled={!signatureAgreed}
+              disabled={!signatureAgreed || evidenceUploading}
             >
               Confirm Submission
             </Button>

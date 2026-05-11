@@ -35,7 +35,6 @@ export async function GET(
         supportingDocuments: true,
         submittedById: true,
         caseId: true,
-        submittedBy: { select: { institutionId: true } },
         case: { select: { linkedAlerts: { select: { institutionId: true } } } },
       },
     });
@@ -46,7 +45,6 @@ export async function GET(
         { status: 404 }
       );
     }
-    assertSTRAccess(authUser, submission);
 
     // Fetch user info separately to handle nulls
     let user = null;
@@ -54,8 +52,10 @@ export async function GET(
       user = await prisma.user.findUnique({
         where: { id: submission.submittedById },
         select: {
+          id: true,
           name: true,
           email: true,
+          institutionId: true,
           institution: {
             select: {
               name: true,
@@ -64,6 +64,12 @@ export async function GET(
         },
       });
     }
+
+    assertSTRAccess(authUser, {
+      submittedById: submission.submittedById,
+      submittedBy: user ? { institutionId: user.institutionId ?? null } : null,
+      case: submission.case,
+    });
 
     // Fetch case info separately to handle nulls
     let caseRecord = null;
@@ -155,9 +161,14 @@ export async function PATCH(
 
     const existing = await prisma.sTRSubmission.findUnique({
       where: { id },
-      include: {
-        submittedBy: { select: { institutionId: true } },
-        case: { include: { linkedAlerts: { select: { institutionId: true } } } },
+      select: {
+        id: true,
+        submittedById: true,
+        caseId: true,
+        status: true,
+        transactionSummary: true,
+        narrative: true,
+        case: { select: { linkedAlerts: { select: { institutionId: true } } } },
       },
     });
 

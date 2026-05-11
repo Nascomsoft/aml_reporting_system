@@ -73,6 +73,7 @@ export function assertCaseAccess(
 export function assertSTRAccess(
   user: SessionUser,
   submission: {
+    submittedById?: string | null;
     submittedBy?: { institutionId: string | null } | null;
     case?: { linkedAlerts?: Array<{ institutionId: string }> } | null;
   }
@@ -81,12 +82,13 @@ export function assertSTRAccess(
 
   const submittedByInstitution =
     Boolean(user.institutionId) && submission.submittedBy?.institutionId === user.institutionId;
+  const submittedBySelf = submission.submittedById === user.id;
   const linkedToInstitutionCase = Boolean(
     user.institutionId &&
       submission.case?.linkedAlerts?.some((alert) => alert.institutionId === user.institutionId)
   );
 
-  if (!submittedByInstitution && !linkedToInstitutionCase) {
+  if (!submittedByInstitution && !submittedBySelf && !linkedToInstitutionCase) {
     throw NextResponse.json({ error: "Forbidden: STR is outside your scope" }, { status: 403 });
   }
 }

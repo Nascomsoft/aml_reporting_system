@@ -33,6 +33,19 @@ export async function GET(
           },
         },
         investigator: { select: { name: true } },
+        attachments: {
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            originalName: true,
+            storedName: true,
+            filePath: true,
+            mimeType: true,
+            size: true,
+            uploadedBy: true,
+            createdAt: true,
+          },
+        },
       },
     });
 
@@ -54,6 +67,18 @@ export async function GET(
       slaRemainingHours: c.slaRemainingHours,
       overdue: c.overdue,
       summary: c.summary,
+      tags: c.tags ?? [],
+      attachments: c.attachments.map((attachment) => ({
+        id: attachment.id,
+        originalName: attachment.originalName,
+        storedName: attachment.storedName,
+        filePath: attachment.filePath,
+        url: attachment.filePath,
+        mimeType: attachment.mimeType,
+        size: attachment.size,
+        uploadedBy: attachment.uploadedBy,
+        createdAt: attachment.createdAt.toISOString(),
+      })),
       linkedAlertDetails: c.linkedAlerts.map((alert) => ({
         id: alert.id,
         title: alert.title,

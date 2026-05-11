@@ -124,6 +124,7 @@ model Case {
   slaRemainingHours   Float          @default(48)
   overdue             Boolean        @default(false)
   summary             String?
+  tags                String[]       @default([])
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
@@ -135,6 +136,7 @@ model Case {
   linkedAlerts        Alert[]
   discussions         CaseDiscussion[]
   auditEntries        CaseAuditEntry[]
+  attachments         CaseAttachment[]
   strSubmissions      STRSubmission[]
 
   @@index([status])
@@ -166,6 +168,24 @@ model CaseAuditEntry {
 
   @@index([caseId])
   @@map("case_audit_entries")
+}
+
+model CaseAttachment {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  caseId        String   @db.ObjectId
+  case          Case     @relation(fields: [caseId], references: [id])
+  originalName   String
+  storedName     String
+  filePath       String
+  cloudinaryPublicId    String?
+  cloudinaryResourceType String?
+  mimeType       String
+  size           Int
+  uploadedBy     String
+  createdAt      DateTime @default(now())
+
+  @@index([caseId])
+  @@map("case_attachments")
 }
 
 // ─── AML Rules ───────────────────────────────────────────────────────────────
