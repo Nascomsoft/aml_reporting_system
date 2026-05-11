@@ -30,8 +30,10 @@ function assertUniqueAccountCustomerMapping(
 
 async function main() {
   console.log("🌱 Seeding AML database...");
+  const runningStep = (step: string) => console.log(`▶ Running: ${step}`);
 
   // Clean existing data in dependency-safe order.
+  runningStep("clearing existing data");
   await prisma.notification.deleteMany();
   await prisma.reportExport.deleteMany();
   await prisma.activityLog.deleteMany();
@@ -49,6 +51,7 @@ async function main() {
   console.log("  Cleared existing data");
 
   // ─── Create Institutions ─────────────────────────────────────────────
+  runningStep("creating institutions");
   const institutions = await Promise.all([
     prisma.institution.create({
       data: { name: "Harbor Crest Bank", code: "HCB", region: "Lagos", riskScore: 45, branchCount: 220 },
@@ -72,6 +75,7 @@ async function main() {
   console.log(`  Created ${institutions.length} institutions`);
 
   // ─── Create Users ────────────────────────────────────────────────────
+  runningStep("creating users");
   const hashedPw = await hash("password123", 12);
 
   const users = await Promise.all([
@@ -123,6 +127,7 @@ async function main() {
   console.log(`  Created ${users.length} users`);
 
   // ─── Create AML Rules ───────────────────────────────────────────────
+  runningStep("creating AML rules");
   const rules = await Promise.all([
     prisma.aMLRule.create({
       data: {
@@ -191,6 +196,7 @@ async function main() {
   console.log(`  Created ${rules.length} AML rules`);
 
   // ─── Create Transactions ─────────────────────────────────────────────
+  runningStep("creating transactions");
   const txTypes = ["DEPOSIT", "WITHDRAWAL", "TRANSFER", "WIRE", "CASH", "CHECK"] as const;
   const txStatuses = ["NORMAL", "FLAGGED", "UNDER_REVIEW", "CLEARED"] as const;
   const countries = ["Nigeria", "Ghana", "UK", "USA", "UAE", "Cameroon", "Benin", "Niger"];
@@ -251,6 +257,7 @@ async function main() {
   console.log(`  Created ${createdTxns.length} transactions`);
 
   // ─── Create Alerts ───────────────────────────────────────────────────
+  runningStep("creating alerts");
   const severities = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
   const lifecycleStages = ["NEW", "UNDER_REVIEW", "ESCALATED", "STR_SUBMITTED", "CLOSED"] as const;
 
@@ -299,6 +306,7 @@ async function main() {
   console.log(`  Created ${alerts.length} alerts`);
 
   // ─── Create Cases ────────────────────────────────────────────────────
+  runningStep("creating cases");
   const caseStatuses = ["NEW", "UNDER_REVIEW", "ESCALATED", "STR_SUBMITTED", "CLOSED"] as const;
 
   const cases = [];
@@ -335,6 +343,7 @@ async function main() {
   console.log(`  Created ${cases.length} cases`);
 
   // ─── Create Case Discussions ─────────────────────────────────────────
+  runningStep("creating case discussions");
   for (const c of cases.slice(0, 10)) {
     await prisma.caseDiscussion.createMany({
       data: [
@@ -362,6 +371,7 @@ async function main() {
   console.log("  Created case discussions");
 
   // ─── Create Case Audit Entries ───────────────────────────────────────
+  runningStep("creating case audit entries");
   for (const c of cases.slice(0, 10)) {
     await prisma.caseAuditEntry.createMany({
       data: [
@@ -392,6 +402,7 @@ async function main() {
   console.log("  Created case audit entries");
 
   // ─── Create STR Submissions ──────────────────────────────────────────
+  runningStep("creating STR submissions");
   for (let i = 0; i < 7; i++) {
     const c = cases[i + 13]; // from STR_SUBMITTED and CLOSED cases
     const statuses = ["SUBMITTED", "UNDER_REVIEW", "CLOSED"] as const;
@@ -420,28 +431,6 @@ async function main() {
     });
   }
 
-
-    const [transactionMappings, alertMappings, strMappings] = await Promise.all([
-      prisma.transaction.findMany({
-        select: { accountNumber: true, customerName: true },
-      }),
-      prisma.alert.findMany({
-        where: { accountNumber: { not: null } },
-        select: { accountNumber: true, customerName: true },
-      }),
-      prisma.sTRSubmission.findMany({
-        select: { accountNumber: true, customerName: true },
-      }),
-    ]);
-
-    assertUniqueAccountCustomerMapping(transactionMappings, "transactions in database");
-    assertUniqueAccountCustomerMapping(alertMappings, "alerts in database");
-    assertUniqueAccountCustomerMapping(strMappings, "STR submissions in database");
-    assertUniqueAccountCustomerMapping(
-      [...transactionMappings, ...alertMappings, ...strMappings],
-      "combined seeded account/customer records"
-    );
-    console.log("  Verified unique account-to-customer mappings across seeded records");
   const happyPathCase = cases[0];
   const happyPathAlerts = alerts.slice(0, 2);
   const happyPathTransactionIds = Array.from(
@@ -529,6 +518,7 @@ async function main() {
   console.log("  Created 8 STR submissions, including one end-to-end happy path");
 
   // ─── Create Activity Logs ───────────────────────────────────────────
+  runningStep("creating activity logs");
   const logActions = ["LOGIN", "ALERT_UPDATE", "CASE_CREATE", "CASE_UPDATE", "STR_SUBMIT", "EXPORT"];
   for (let i = 0; i < 50; i++) {
     await prisma.activityLog.create({
@@ -545,6 +535,7 @@ async function main() {
   console.log("  Created 50 activity logs");
 
   // ─── Create Notifications ───────────────────────────────────────────
+  runningStep("creating notifications");
   for (const user of users.slice(1)) {
     await prisma.notification.createMany({
       data: [
@@ -573,6 +564,29 @@ async function main() {
     });
   }
   console.log("  Created notifications");
+
+  runningStep("validating account/customer mapping integrity");
+  const [transactionMappings, alertMappings, strMappings] = await Promise.all([
+    prisma.transaction.findMany({
+      select: { accountNumber: true, customerName: true },
+    }),
+    prisma.alert.findMany({
+      where: { accountNumber: { not: null } },
+      select: { accountNumber: true, customerName: true },
+    }),
+    prisma.sTRSubmission.findMany({
+      select: { accountNumber: true, customerName: true },
+    }),
+  ]);
+
+  assertUniqueAccountCustomerMapping(transactionMappings, "transactions in database");
+  assertUniqueAccountCustomerMapping(alertMappings, "alerts in database");
+  assertUniqueAccountCustomerMapping(strMappings, "STR submissions in database");
+  assertUniqueAccountCustomerMapping(
+    [...transactionMappings, ...alertMappings, ...strMappings],
+    "combined seeded account/customer records"
+  );
+  console.log("  Verified unique account-to-customer mappings across seeded records");
 
   console.log("\n✅ Database seeded successfully!");
   console.log("\n📋 Login credentials:");
