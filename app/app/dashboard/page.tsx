@@ -163,6 +163,34 @@ export default function OfficerDashboard() {
     );
   };
 
+  const renderOccupationBreakdown = () => {
+    if (bankDashboard.loading) return <div style={{ color: "#94a3b8" }}>Loading occupations...</div>;
+    if (bankDashboard.error) return <div style={{ color: "#ef4444" }}>Error</div>;
+    if (!bankDashboard.data?.topOccupations.length) return <div style={{ color: "#94a3b8" }}>No occupation data</div>;
+
+    const topOccupations = bankDashboard.data.topOccupations;
+    const maxCount = Math.max(...topOccupations.map((item) => item.count));
+
+    return (
+      <div style={{ display: "grid", gap: 10 }}>
+        {topOccupations.map((item) => {
+          const width = maxCount > 0 ? (item.count / maxCount) * 100 : 0;
+          return (
+            <div key={item.occupation}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                <span>{item.occupation}</span>
+                <span style={{ opacity: 0.7 }}>{item.count}</span>
+              </div>
+              <div style={{ height: 6, background: "#1e293b", borderRadius: 999, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${width}%`, background: "#38bdf8", borderRadius: 999 }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   // Render alert lifecycle breakdown
   const renderAlertLifecycle = () => {
     if (lifecycle.loading) return <div style={{ color: "#94a3b8" }}>Loading...</div>;
@@ -390,7 +418,7 @@ export default function OfficerDashboard() {
         </div>
 
         {/* Right Column: Alerts & Indicators */}
-        <div style={{ display: "grid", gridTemplateRows: "auto auto", gap: 20 }}>
+        <div style={{ display: "grid", gridTemplateRows: "auto auto auto", gap: 20 }}>
           {/* Top Alerts */}
           <div style={{ padding: 16, background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b" }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Priority Alerts</h3>
@@ -401,6 +429,11 @@ export default function OfficerDashboard() {
           <div style={{ padding: 16, background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b" }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Real-time Indicators</h3>
             {renderRealtimeIndicators()}
+          </div>
+
+          <div style={{ padding: 16, background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Top Occupations</h3>
+            {renderOccupationBreakdown()}
           </div>
         </div>
       </section>

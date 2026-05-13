@@ -9,6 +9,7 @@ export interface StreamTransaction {
   transactionRef: string;
   customerName: string;
   accountNumber: string;
+  occupation?: string | null;
   amount: number;
   currency: string;
   transactionType: string;
@@ -193,6 +194,11 @@ export function LiveTransactionStream({
                     <p className="font-medium text-sm truncate text-black">
                       {txn.customerName}
                     </p>
+                    {txn.occupation && (
+                      <p className="text-xs text-gray-500 mt-1 truncate">
+                        {txn.occupation}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-sm text-black">
@@ -215,6 +221,11 @@ export function LiveTransactionStream({
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2">
+                    {txn.occupation && (
+                      <span className="text-xs px-2 py-1 bg-slate-100 text-slate-700 rounded font-medium">
+                        {txn.occupation}
+                      </span>
+                    )}
                     {txn.country && (
                       <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">
                         {txn.country}

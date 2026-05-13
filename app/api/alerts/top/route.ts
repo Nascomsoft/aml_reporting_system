@@ -32,6 +32,7 @@ export async function GET(request: Request) {
         institution: a.institution?.name ?? "",
         timestamp: a.timestamp.toISOString(),
         lifecycleStage: fromLifecycle(a.lifecycleStage),
+        occupation: a.occupation,
       })),
       total,
       page: 1,

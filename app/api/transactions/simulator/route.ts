@@ -153,6 +153,7 @@ export async function GET(request: Request) {
                   transactionRef: transaction.transactionRef,
                   customerName: transaction.customerName,
                   accountNumber: transaction.accountNumber,
+                  occupation: transaction.occupation,
                   amount: transaction.amount,
                   currency: transaction.currency,
                   transactionType: transaction.transactionType,

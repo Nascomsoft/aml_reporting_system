@@ -65,6 +65,7 @@ export async function GET(request: Request) {
         amount: a.amount,
         customerName: a.customerName,
         accountNumber: a.accountNumber,
+        occupation: a.occupation,
         ruleTriggered: a.ruleTriggered,
         caseId: a.caseId,
         transactionIds: a.transactionIds,

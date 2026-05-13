@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     const offset = parseInt(searchParams.get("offset") || "0");
     const status = searchParams.get("status");
     const search = searchParams.get("search");
+    const occupation = searchParams.get("occupation");
 
     // Build where clause based on role
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,12 +28,17 @@ export async function GET(request: Request) {
       whereClause.status = status;
     }
 
+    if (occupation) {
+      whereClause.occupation = occupation;
+    }
+
     // Search by customer name or account number
     if (search) {
       whereClause.OR = [
         { customerName: { contains: search, mode: "insensitive" } },
         { accountNumber: { contains: search, mode: "insensitive" } },
         { transactionRef: { contains: search, mode: "insensitive" } },
+        { occupation: { contains: search, mode: "insensitive" } },
       ];
     }
 

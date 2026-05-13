@@ -245,6 +245,25 @@ function calculateBaseRiskScore(
     score += 8;
   }
 
+  const occupationRisk: Record<string, number> = {
+    "Import/Export Trader": 6,
+    "Business Owner": 5,
+    "Transport Operator": 4,
+    "Retail Merchant": 4,
+    Consultant: 3,
+    "Tech Professional": 2,
+    Freelancer: 2,
+    Teacher: 1,
+    "Healthcare Worker": 1,
+    "Civil Servant": 1,
+    Student: 1,
+    Farmer: 1,
+  };
+
+  if (transaction.occupation) {
+    score += occupationRisk[transaction.occupation] ?? 0;
+  }
+
   return Math.min(score, 40); // Base score capped at 40
 }
 

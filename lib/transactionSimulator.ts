@@ -1,5 +1,6 @@
 import { Transaction, TransactionType, Institution } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { occupationCategories } from "./occupationCatalog";
 
 /**
  * Generate realistic transaction data for simulation
@@ -10,6 +11,7 @@ export function generateRealisticTransaction(
     customerName?: string;
     accountNumber?: string;
     amount?: number;
+    occupation?: string;
   }
 ): Omit<Transaction, "id" | "createdAt"> {
   const transactionTypes: TransactionType[] = [
@@ -92,6 +94,9 @@ export function generateRealisticTransaction(
   const customerName =
     options?.customerName ??
     `${customerFirstNames[Math.floor(Math.random() * customerFirstNames.length)]} ${customerLastNames[Math.floor(Math.random() * customerLastNames.length)]}`;
+  const occupation =
+    options?.occupation ??
+    occupationCategories[Math.floor(Math.random() * occupationCategories.length)];
 
   const transactionRef = generateTransactionRef();
   const country =
@@ -117,6 +122,7 @@ export function generateRealisticTransaction(
     transactionRef,
     accountNumber,
     customerName,
+    occupation,
     amount,
     currency: "NGN",
     transactionType,
@@ -190,8 +196,30 @@ export async function simulateTransaction(
     severity?: string;
   }>
 ) {
+  const customerProfiles = await prisma.customerProfile.findMany({
+    select: {
+      accountNumber: true,
+      customerName: true,
+      occupation: true,
+    },
+  });
+
+  const selectedCustomerProfile =
+    customerProfiles.length > 0
+      ? customerProfiles[Math.floor(Math.random() * customerProfiles.length)]
+      : null;
+
   // Generate realistic transaction data
-  const transaction = generateRealisticTransaction(institution);
+  const transaction = generateRealisticTransaction(
+    institution,
+    selectedCustomerProfile
+      ? {
+          customerName: selectedCustomerProfile.customerName,
+          accountNumber: selectedCustomerProfile.accountNumber,
+          occupation: selectedCustomerProfile.occupation,
+        }
+      : undefined
+  );
 
   // Evaluate against rules
   const flagResult = await ruleEvaluator(transaction);
@@ -223,6 +251,7 @@ export async function simulateTransaction(
         amount: createdTransaction.amount,
         customerName: createdTransaction.customerName,
         accountNumber: createdTransaction.accountNumber,
+        occupation: createdTransaction.occupation,
         ruleTriggered: flagResult.ruleName || "Unknown",
         institutionId: institution.id,
         flagReason: flagResult.ruleName,

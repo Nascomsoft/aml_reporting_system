@@ -47,6 +47,7 @@ export interface AlertResponse {
   timestamp: string;
   lifecycleStage?: 'new' | 'underReview' | 'escalated' | 'strSubmitted' | 'closed';
   caseId?: string | null;
+  occupation?: string | null;
 }
 
 export interface AlertsListResponse {
@@ -68,6 +69,10 @@ export interface BankDashboardResponse {
   branchesRequiringAttention: number;
   casesUnderReview: number;
   casesPendingEscalation: number;
+  topOccupations: Array<{
+    occupation: string;
+    count: number;
+  }>;
 }
 
 export interface RegulatorDashboardResponse {
@@ -642,6 +647,7 @@ export interface TransactionData {
   transactionRef: string;
   customerName: string;
   accountNumber: string;
+  occupation?: string | null;
   amount: number;
   currency: string;
   transactionType: string;

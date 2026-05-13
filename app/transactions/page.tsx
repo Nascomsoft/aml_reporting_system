@@ -7,6 +7,7 @@ import { SimulationControls, type SimulationStatus } from "@/components/Simulati
 import { LiveTransactionStream, type StreamTransaction } from "@/components/LiveTransactionStream";
 import { authFetch, authStreamUrl } from "@/lib/auth-client";
 import { useAuth } from "@/lib/auth-context";
+import { occupationCategories } from "@/lib/occupationCatalog";
 
 const fetch = authFetch;
 
@@ -15,6 +16,7 @@ interface Transaction {
   transactionRef: string;
   customerName: string;
   accountNumber: string;
+  occupation?: string | null;
   amount: number;
   currency: string;
   transactionType: string;
@@ -48,6 +50,7 @@ export default function TransactionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [occupationFilter, setOccupationFilter] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
@@ -71,6 +74,7 @@ export default function TransactionsPage() {
       params.append("offset", offset.toString());
       if (search) params.append("search", search);
       if (statusFilter) params.append("status", statusFilter);
+      if (occupationFilter) params.append("occupation", occupationFilter);
 
       const response = await fetch(`/api/transactions?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch transactions");
@@ -83,7 +87,7 @@ export default function TransactionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [limit, offset, search, statusFilter]);
+  }, [limit, offset, search, statusFilter, occupationFilter]);
 
   useEffect(() => {
     if (!user) {
@@ -291,6 +295,7 @@ export default function TransactionsPage() {
   const tableColumns = [
     { header: "Ref", accessor: "transactionRef", width: "10%" },
     { header: "Customer", accessor: "customerName", width: "15%" },
+    { header: "Occupation", accessor: "occupation", width: "12%" },
     { header: "Account", accessor: "accountNumber", width: "12%" },
     { header: "Amount", accessor: "amount", width: "12%", format: (v: number) => `₦${v.toLocaleString()}` },
     { header: "Type", accessor: "transactionType", width: "10%" },
@@ -367,10 +372,10 @@ export default function TransactionsPage() {
 
       {/* Batch Transactions Section */}
       <Card className="mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           <FormInput
             label="Search"
-            placeholder="Customer/Account/Ref..."
+            placeholder="Customer/Account/Ref/Occupation..."
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -380,6 +385,7 @@ export default function TransactionsPage() {
           <Select
             label="Status"
             value={statusFilter}
+            placeholderDisabled={true}
             onChange={(e) => {
               setStatusFilter(e.target.value);
               setPage(1);
@@ -390,6 +396,19 @@ export default function TransactionsPage() {
               { value: "FLAGGED", label: "Flagged" },
               { value: "UNDER_REVIEW", label: "Under Review" },
               { value: "CLEARED", label: "Cleared" },
+            ]}
+          />
+          <Select
+            label="Occupation"
+            value={occupationFilter}
+            placeholderDisabled={true}
+            onChange={(e) => {
+              setOccupationFilter(e.target.value);
+              setPage(1);
+            }}
+            options={[
+              { value: "", label: "All Occupations" },
+              ...occupationCategories.map((occupation) => ({ value: occupation, label: occupation })),
             ]}
           />
           <div className="flex items-end">

@@ -61,6 +61,24 @@ model Institution {
   @@map("institutions")
 }
 
+// ─── Customer Profiles ──────────────────────────────────────────────────────
+
+model CustomerProfile {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  accountNumber String   @unique
+  customerName  String   @unique
+  occupation    String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // relations
+  transactions  Transaction[]
+  alerts        Alert[]
+
+  @@index([occupation])
+  @@map("customer_profiles")
+}
+
 // ─── Alerts ──────────────────────────────────────────────────────────────────
 
 model Alert {
@@ -73,6 +91,7 @@ model Alert {
   amount          Float
   customerName    String
   accountNumber   String?
+  occupation      String?
   ruleTriggered   String
   institutionId   String         @db.ObjectId
   institution     Institution    @relation(fields: [institutionId], references: [id])
@@ -84,6 +103,8 @@ model Alert {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
+  customerProfile CustomerProfile? @relation(fields: [accountNumber], references: [accountNumber])
+
   // relations
   caseId          String?        @db.ObjectId
   case            Case?          @relation(fields: [caseId], references: [id])
@@ -93,6 +114,7 @@ model Alert {
   @@index([lifecycleStage])
   @@index([institutionId])
   @@index([timestamp])
+  @@index([occupation])
   @@map("alerts")
 }
 
@@ -258,6 +280,7 @@ model Transaction {
   transactionRef  String            @unique
   accountNumber   String
   customerName    String
+  occupation      String?
   amount          Float
   currency        String            @default("USD")
   transactionType TransactionType
@@ -271,10 +294,13 @@ model Transaction {
   metadata        Json?
   createdAt       DateTime          @default(now())
 
+  customerProfile CustomerProfile?  @relation(fields: [accountNumber], references: [accountNumber])
+
   // alertIds stores references to Alerts that flagged this transaction (denormalized for performance)
   alertIds        String[]       // Reference strings for linked alerts
 
   @@index([accountNumber])
+  @@index([occupation])
   @@index([date])
   @@index([riskScore])
   @@index([status])

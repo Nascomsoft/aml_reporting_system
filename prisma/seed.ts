@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
+import { occupationCategories } from "../lib/occupationCatalog";
 
 const prisma = new PrismaClient();
 
@@ -45,6 +46,7 @@ async function main() {
   await prisma.alert.deleteMany();
   await prisma.case.deleteMany();
   await prisma.transaction.deleteMany();
+  await prisma.customerProfile.deleteMany();
   await prisma.user.deleteMany();
   await prisma.institution.deleteMany();
 
@@ -201,27 +203,35 @@ async function main() {
   const txStatuses = ["NORMAL", "FLAGGED", "UNDER_REVIEW", "CLEARED"] as const;
   const countries = ["Nigeria", "Ghana", "UK", "USA", "UAE", "Cameroon", "Benin", "Niger"];
   const customerProfiles = [
-    { name: "Chioma Okafor", accountNumber: "ACC-0001000" },
-    { name: "Emeka Nwosu", accountNumber: "ACC-0001001" },
-    { name: "Aisha Yusuf", accountNumber: "ACC-0001002" },
-    { name: "Titilayo Adeyemi", accountNumber: "ACC-0001003" },
-    { name: "Adebayo Oluwaseun", accountNumber: "ACC-0001004" },
-    { name: "Zainab Mohammed", accountNumber: "ACC-0001005" },
-    { name: "Ifeanyi Ezekiel", accountNumber: "ACC-0001006" },
-    { name: "Hana Okechukwu", accountNumber: "ACC-0001007" },
-    { name: "Tunde Adekunle", accountNumber: "ACC-0001008" },
-    { name: "Blessing Obi", accountNumber: "ACC-0001009" },
-    { name: "Mahmoud Ibrahim", accountNumber: "ACC-0001010" },
-    { name: "Hauwa Abubakar", accountNumber: "ACC-0001011" },
-    { name: "Olufemi Ogunleye", accountNumber: "ACC-0001012" },
-    { name: "Amara Onwuka", accountNumber: "ACC-0001013" },
-    { name: "Kayode Adeleke", accountNumber: "ACC-0001014" },
-    { name: "Fatima Hassan", accountNumber: "ACC-0001015" },
+    { name: "Chioma Okafor", accountNumber: "ACC-0001000", occupation: occupationCategories[0] },
+    { name: "Emeka Nwosu", accountNumber: "ACC-0001001", occupation: occupationCategories[1] },
+    { name: "Aisha Yusuf", accountNumber: "ACC-0001002", occupation: occupationCategories[2] },
+    { name: "Titilayo Adeyemi", accountNumber: "ACC-0001003", occupation: occupationCategories[3] },
+    { name: "Adebayo Oluwaseun", accountNumber: "ACC-0001004", occupation: occupationCategories[4] },
+    { name: "Zainab Mohammed", accountNumber: "ACC-0001005", occupation: occupationCategories[5] },
+    { name: "Ifeanyi Ezekiel", accountNumber: "ACC-0001006", occupation: occupationCategories[6] },
+    { name: "Hana Okechukwu", accountNumber: "ACC-0001007", occupation: occupationCategories[7] },
+    { name: "Tunde Adekunle", accountNumber: "ACC-0001008", occupation: occupationCategories[8] },
+    { name: "Blessing Obi", accountNumber: "ACC-0001009", occupation: occupationCategories[9] },
+    { name: "Mahmoud Ibrahim", accountNumber: "ACC-0001010", occupation: occupationCategories[10] },
+    { name: "Hauwa Abubakar", accountNumber: "ACC-0001011", occupation: occupationCategories[11] },
+    { name: "Olufemi Ogunleye", accountNumber: "ACC-0001012", occupation: occupationCategories[0] },
+    { name: "Amara Onwuka", accountNumber: "ACC-0001013", occupation: occupationCategories[2] },
+    { name: "Kayode Adeleke", accountNumber: "ACC-0001014", occupation: occupationCategories[4] },
+    { name: "Fatima Hassan", accountNumber: "ACC-0001015", occupation: occupationCategories[8] },
   ];
   const customerNames = customerProfiles.map((customer) => customer.name);
   const accountByCustomer = new Map(
     customerProfiles.map((customer) => [customer.name, customer.accountNumber])
   );
+
+  await prisma.customerProfile.createMany({
+    data: customerProfiles.map((customer) => ({
+      customerName: customer.name,
+      accountNumber: customer.accountNumber,
+      occupation: customer.occupation,
+    })),
+  });
 
   const transactions = [];
   for (let i = 0; i < 200; i++) {
@@ -240,6 +250,7 @@ async function main() {
       currency: "NGN",
       transactionType: txTypes[i % txTypes.length],
       country: countries[i % countries.length],
+      occupation: customerProfile.occupation,
       riskScore: isFlagged ? Math.floor(Math.random() * 40) + 60 : Math.floor(Math.random() * 40),
       status: isFlagged ? txStatuses[1] : txStatuses[0],
       flagReason: isFlagged ? rules[i % rules.length].name : null,
@@ -292,6 +303,7 @@ async function main() {
           amount: linkedTx.amount,
           customerName: linkedTx.customerName,
           accountNumber: linkedTx.accountNumber,
+          occupation: linkedTx.occupation,
           ruleTriggered: rules[i % rules.length].name,
           institutionId: institutions[instIdx].id,
           slsRemaining: Math.max(0, 48 - i * 0.5),

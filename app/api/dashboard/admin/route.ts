@@ -21,11 +21,26 @@ export async function GET() {
         ? `${(recentTx / 1000).toFixed(1)}K txn/hr`
         : `${totalTransactions} total`;
 
+    const transactions = await prisma.transaction.findMany({
+      select: { occupation: true },
+    });
+    const occupationCounts = new Map<string, number>();
+    for (const transaction of transactions) {
+      const occupation = transaction.occupation ?? "Unspecified";
+      occupationCounts.set(occupation, (occupationCounts.get(occupation) ?? 0) + 1);
+    }
+
+    const topOccupations = Array.from(occupationCounts.entries())
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 5)
+      .map(([occupation, count]) => ({ occupation, count }));
+
     return NextResponse.json({
       systemUptime: "99.9%",
       activeUsers,
       dataProcessingRate: rate,
       lastBackupTime: new Date().toISOString(),
+      topOccupations,
     });
   } catch (error) {
     return handleApiError(error);
