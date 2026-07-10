@@ -1,8 +1,19 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
 import { occupationCategories } from "../lib/occupationCatalog";
 
 const prisma = new PrismaClient();
+const SEEDED_TRANSACTION_COUNT = 650;
+const SEEDED_FLAGGED_TRANSACTION_COUNT = Math.round(SEEDED_TRANSACTION_COUNT * 0.3);
+const SEEDED_TRANSACTION_WINDOW_DAYS = 30;
+
+const seededFlagReasons = [
+  "Large Cash Transaction",
+  "Rapid Fund Movement",
+  "Structuring Detection",
+  "Circular Transaction Pattern",
+  "Dormant Account Activity",
+] as const;
 
 type AccountCustomerRecord = {
   accountNumber: string | null | undefined;
@@ -27,6 +38,119 @@ function assertUniqueAccountCustomerMapping(
 
     accountToCustomer.set(record.accountNumber, record.customerName);
   }
+}
+
+function seededNormalAmount(transactionType: string): number {
+  let amount = Math.floor(Math.random() * 500000) + 100;
+
+  if (transactionType === "CASH" && amount > 95000) {
+    amount = Math.floor(Math.random() * 85000) + 5000;
+  }
+
+  if (amount >= 90000 && amount <= 99999) {
+    amount = Math.floor(Math.random() * 75000) + 10000;
+  }
+
+  if (amount >= 9000 && amount <= 9900) {
+    amount = Math.floor(Math.random() * 65000) + 10000;
+  }
+
+  return amount;
+}
+
+function seededNormalRiskScore(amount: number, transactionType: string, index: number): number {
+  let score = 4 + (index % 9);
+
+  if (amount > 500000) score += 10;
+  else if (amount > 100000) score += 5;
+
+  if (["WIRE", "CASH", "CHECK"].includes(transactionType)) score += 5;
+
+  return Math.min(score, 38);
+}
+
+function seededTransactionDate(index: number): Date {
+  const now = new Date();
+  const daysAgo = index % SEEDED_TRANSACTION_WINDOW_DAYS;
+  const date = new Date(now);
+
+  date.setDate(now.getDate() - daysAgo);
+  date.setHours((index * 7) % 24, (index * 13) % 60, (index * 17) % 60, 0);
+
+  return date;
+}
+
+function seededFlaggedTransactionShape(index: number): {
+  amount: number;
+  transactionType: "DEPOSIT" | "WITHDRAWAL" | "TRANSFER" | "WIRE" | "CASH" | "CHECK";
+  riskScore: number;
+  flagReason: (typeof seededFlagReasons)[number];
+  metadata: Prisma.InputJsonObject;
+} {
+  const patternIndex = index % seededFlagReasons.length;
+  const flagReason = seededFlagReasons[patternIndex];
+  const metadata: Record<string, Prisma.InputJsonValue> = {
+    source: "seed",
+    suspiciousPattern: flagReason.toLowerCase().replaceAll(" ", "_"),
+  };
+
+  if (flagReason === "Large Cash Transaction") {
+    return {
+      amount: 125000 + ((index * 7919) % 650000),
+      transactionType: "CASH",
+      riskScore: 58 + (index % 18),
+      flagReason,
+      metadata: metadata as Prisma.InputJsonObject,
+    };
+  }
+
+  if (flagReason === "Rapid Fund Movement") {
+    metadata.velocity = 6 + (index % 7);
+    return {
+      amount: 75000 + ((index * 6151) % 350000),
+      transactionType: index % 2 === 0 ? "TRANSFER" : "WIRE",
+      riskScore: 72 + (index % 22),
+      flagReason,
+      metadata: metadata as Prisma.InputJsonObject,
+    };
+  }
+
+  if (flagReason === "Structuring Detection") {
+    return {
+      amount: 90000 + (index % 10000),
+      transactionType: index % 2 === 0 ? "DEPOSIT" : "TRANSFER",
+      riskScore: 47 + (index % 17),
+      flagReason,
+      metadata: metadata as Prisma.InputJsonObject,
+    };
+  }
+
+  if (flagReason === "Circular Transaction Pattern") {
+    metadata.circular = true;
+    return {
+      amount: 100000 + ((index * 4567) % 500000),
+      transactionType: index % 2 === 0 ? "TRANSFER" : "WIRE",
+      riskScore: 78 + (index % 18),
+      flagReason,
+      metadata: metadata as Prisma.InputJsonObject,
+    };
+  }
+
+  metadata.dormantReactivation = true;
+  return {
+    amount: 50000 + ((index * 3253) % 300000),
+    transactionType: ["DEPOSIT", "WITHDRAWAL", "TRANSFER"][index % 3] as "DEPOSIT" | "WITHDRAWAL" | "TRANSFER",
+    riskScore: 45 + (index % 15),
+    flagReason,
+    metadata: metadata as Prisma.InputJsonObject,
+  };
+}
+
+function alertSeverityFromRiskScore(riskScore: number): "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" {
+  if (riskScore >= 85) return "CRITICAL";
+  if (riskScore >= 65) return "HIGH";
+  if (riskScore >= 45) return "MEDIUM";
+  return "LOW";
 }
 
 async function main() {
@@ -138,7 +262,7 @@ async function main() {
         ruleType: "THRESHOLD",
         threshold: 100000,
         severity: "HIGH",
-        riskWeight: 3.0,
+        riskWeight: 2.2,
         createdById: users[0].id,
       },
     }),
@@ -149,7 +273,7 @@ async function main() {
         ruleType: "VELOCITY",
         threshold: 5,
         severity: "CRITICAL",
-        riskWeight: 5.0,
+        riskWeight: 2.8,
         createdById: users[0].id,
       },
     }),
@@ -159,7 +283,7 @@ async function main() {
         description: "Multiple transactions just below reporting threshold",
         ruleType: "PATTERN",
         severity: "HIGH",
-        riskWeight: 4.0,
+        riskWeight: 2.0,
         condition: "amount > 90000 AND amount < 100000 AND count > 3",
         createdById: users[0].id,
       },
@@ -170,7 +294,7 @@ async function main() {
         description: "Funds returning to originator through intermediaries",
         ruleType: "PATTERN",
         severity: "CRITICAL",
-        riskWeight: 5.0,
+        riskWeight: 2.6,
         createdById: users[0].id,
       },
     }),
@@ -180,7 +304,7 @@ async function main() {
         description: "Sudden activity on previously dormant account",
         ruleType: "PATTERN",
         severity: "MEDIUM",
-        riskWeight: 2.5,
+        riskWeight: 1.8,
         createdById: users[0].id,
       },
     }),
@@ -190,7 +314,7 @@ async function main() {
         description: "Transfers involving FATF-listed jurisdictions",
         ruleType: "PATTERN",
         severity: "HIGH",
-        riskWeight: 4.5,
+        riskWeight: 2.0,
         createdById: users[0].id,
       },
     }),
@@ -200,8 +324,6 @@ async function main() {
   // ─── Create Transactions ─────────────────────────────────────────────
   runningStep("creating transactions");
   const txTypes = ["DEPOSIT", "WITHDRAWAL", "TRANSFER", "WIRE", "CASH", "CHECK"] as const;
-  const txStatuses = ["NORMAL", "FLAGGED", "UNDER_REVIEW", "CLEARED"] as const;
-  const countries = ["Nigeria", "Ghana", "UK", "USA", "UAE", "Cameroon", "Benin", "Niger"];
   const customerProfiles = [
     { name: "Chioma Okafor", accountNumber: "ACC-0001000", occupation: occupationCategories[0] },
     { name: "Emeka Nwosu", accountNumber: "ACC-0001001", occupation: occupationCategories[1] },
@@ -219,6 +341,15 @@ async function main() {
     { name: "Amara Onwuka", accountNumber: "ACC-0001013", occupation: occupationCategories[2] },
     { name: "Kayode Adeleke", accountNumber: "ACC-0001014", occupation: occupationCategories[4] },
     { name: "Fatima Hassan", accountNumber: "ACC-0001015", occupation: occupationCategories[8] },
+    { name: "Nneka Eze", accountNumber: "ACC-0001016", occupation: occupationCategories[1] },
+    { name: "Sani Bello", accountNumber: "ACC-0001017", occupation: occupationCategories[5] },
+    { name: "Yemi Balogun", accountNumber: "ACC-0001018", occupation: occupationCategories[7] },
+    { name: "Mariam Abdullahi", accountNumber: "ACC-0001019", occupation: occupationCategories[10] },
+    { name: "Kelechi Udo", accountNumber: "ACC-0001020", occupation: occupationCategories[11] },
+    { name: "Bola Akinwale", accountNumber: "ACC-0001021", occupation: occupationCategories[0] },
+    { name: "Hadiza Sani", accountNumber: "ACC-0001022", occupation: occupationCategories[3] },
+    { name: "Chukwuma Nnamdi", accountNumber: "ACC-0001023", occupation: occupationCategories[6] },
+    { name: "Rukayat Lawal", accountNumber: "ACC-0001024", occupation: occupationCategories[9] },
   ];
   const customerNames = customerProfiles.map((customer) => customer.name);
   const accountByCustomer = new Map(
@@ -234,13 +365,15 @@ async function main() {
   });
 
   const transactions = [];
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < SEEDED_TRANSACTION_COUNT; i++) {
     const instIdx = i % institutions.length;
     const customerProfile = customerProfiles[i % customerProfiles.length];
-    const isFlagged = Math.random() > 0.7;
-    const amount = isFlagged
-      ? Math.floor(Math.random() * 500000) + 50000
-      : Math.floor(Math.random() * 50000) + 100;
+    const isFlagged = i < SEEDED_FLAGGED_TRANSACTION_COUNT;
+    const normalTransactionType = txTypes[i % txTypes.length];
+    const suspiciousShape = isFlagged ? seededFlaggedTransactionShape(i) : null;
+    const transactionType = suspiciousShape?.transactionType ?? normalTransactionType;
+    const amount = suspiciousShape?.amount ?? seededNormalAmount(transactionType);
+    const riskScore = suspiciousShape?.riskScore ?? seededNormalRiskScore(amount, transactionType, i);
 
     transactions.push({
       transactionRef: `TXN-${String(i + 1).padStart(6, "0")}`,
@@ -248,14 +381,15 @@ async function main() {
       customerName: customerProfile.name,
       amount,
       currency: "NGN",
-      transactionType: txTypes[i % txTypes.length],
-      country: countries[i % countries.length],
+      transactionType,
+      country: "Nigeria",
       occupation: customerProfile.occupation,
-      riskScore: isFlagged ? Math.floor(Math.random() * 40) + 60 : Math.floor(Math.random() * 40),
-      status: isFlagged ? txStatuses[1] : txStatuses[0],
-      flagReason: isFlagged ? rules[i % rules.length].name : null,
-      date: new Date(Date.now() - Math.floor(Math.random() * 30) * 86400000),
+      riskScore,
+      status: isFlagged ? ("FLAGGED" as const) : ("NORMAL" as const),
+      flagReason: suspiciousShape?.flagReason ?? null,
+      date: seededTransactionDate(i),
       institutionId: institutions[instIdx].id,
+      metadata: suspiciousShape?.metadata ?? ({ source: "seed" } satisfies Prisma.InputJsonObject),
     });
   }
 
@@ -273,42 +407,43 @@ async function main() {
   const lifecycleStages = ["NEW", "UNDER_REVIEW", "ESCALATED", "STR_SUBMITTED", "CLOSED"] as const;
 
   const alertTitles = [
-    "Large cash deposit detected", "Rapid fund movement pattern", "Structuring activity suspected",
-    "Circular transaction identified", "Dormant account reactivation", "High-risk country transfer",
-    "Unusual wire transfer volume", "Multiple small deposits", "Cross-border suspicious activity",
-    "Shell company transaction", "PEP-linked transfer", "Smurfing pattern detected",
-    "Layering activity found", "Trade-based laundering signal", "Underground banking indicator",
-    "Tax haven wire transfer", "Bulk cash smuggling pattern", "Funnel account activity",
-    "Suspicious ATM usage", "Nominee account activity"
+    "Large cash transaction detected", "Rapid fund movement pattern", "Structuring activity suspected",
+    "Circular transaction identified", "Dormant account reactivation", "Unusual wire transfer volume",
+    "Multiple small deposits", "Layering activity found", "Trade-based laundering signal",
+    "Funnel account activity", "Suspicious ATM usage", "Nominee account activity"
   ];
 
   const flaggedTxns = createdTxns.filter((t) => t.status === "FLAGGED");
-  const alertSourceTxns = flaggedTxns.length > 0 ? flaggedTxns : createdTxns;
+  if (flaggedTxns.length !== SEEDED_FLAGGED_TRANSACTION_COUNT) {
+    throw new Error(
+      `Seed integrity error: expected ${SEEDED_FLAGGED_TRANSACTION_COUNT} flagged transactions but found ${flaggedTxns.length}`
+    );
+  }
 
   const alerts = [];
   for (let i = 0; i < 80; i++) {
-    const instIdx = i % institutions.length;
-    const severityIdx = i < 15 ? 0 : i < 35 ? 1 : i < 60 ? 2 : 3;
     const lifecycleIdx = i < 20 ? 0 : i < 40 ? 1 : i < 55 ? 2 : i < 65 ? 3 : 4;
-    const linkedTx = alertSourceTxns[i % alertSourceTxns.length];
+    const linkedTx = flaggedTxns[i % flaggedTxns.length];
+    const alertSeverity = alertSeverityFromRiskScore(linkedTx.riskScore);
+    const ruleTriggered = linkedTx.flagReason ?? seededFlagReasons[i % seededFlagReasons.length];
 
     alerts.push(
       await prisma.alert.create({
         data: {
           title: alertTitles[i % alertTitles.length],
-          description: `Automated detection: ${alertTitles[i % alertTitles.length]} at ${institutions[instIdx].name}`,
-          severity: severities[severityIdx],
+          description: `Automated detection: ${ruleTriggered} at ${linkedTx.customerName}'s Nigerian account`,
+          severity: alertSeverity,
           lifecycleStage: lifecycleStages[lifecycleIdx],
-          riskScore: 100 - severityIdx * 20 - Math.floor(Math.random() * 15),
+          riskScore: linkedTx.riskScore,
           amount: linkedTx.amount,
           customerName: linkedTx.customerName,
           accountNumber: linkedTx.accountNumber,
           occupation: linkedTx.occupation,
-          ruleTriggered: rules[i % rules.length].name,
-          institutionId: institutions[instIdx].id,
+          ruleTriggered,
+          institutionId: linkedTx.institutionId,
           slsRemaining: Math.max(0, 48 - i * 0.5),
-          flagReason: rules[i % rules.length].description,
-          country: linkedTx.country ?? "Ethiopia",
+          flagReason: ruleTriggered,
+          country: "Nigeria",
           timestamp: new Date(Date.now() - Math.floor(Math.random() * 7) * 86400000),
           transactionIds: [linkedTx.id],
         },
@@ -415,9 +550,13 @@ async function main() {
 
   // ─── Create STR Submissions ──────────────────────────────────────────
   runningStep("creating STR submissions");
-  for (let i = 0; i < 7; i++) {
+  const SEEDED_STR_SUBMISSION_COUNT = 20;
+  const SEEDED_DRAFT_STR_COUNT = 3;
+
+  for (let i = 0; i < SEEDED_STR_SUBMISSION_COUNT - 1; i++) {
     const c = cases[i + 13]; // from STR_SUBMITTED and CLOSED cases
-    const statuses = ["SUBMITTED", "UNDER_REVIEW", "CLOSED"] as const;
+    const statuses = ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "CLOSED"] as const;
+    const status = i < SEEDED_DRAFT_STR_COUNT ? statuses[0] : statuses[(i % 3) + 1];
     const riskClassifications = i < 3 ? "CRITICAL" : "HIGH"; // Must be uppercase enum values for Prisma
     const strCustomerName = c?.customer ?? customerNames[i];
     const strAccountNumber =
@@ -431,14 +570,14 @@ async function main() {
         descriptionOfSuspicion: "Pattern consistent with layering and structuring activities detected through automated monitoring",
         rulesTriggered: [rules[i % rules.length].name, rules[(i + 1) % rules.length].name],
         transactionIds: [createdTxns[i].id],
-        behavioralDeviations: ["Unusual transaction volume", "New beneficiary pattern", "Cross-border transfers to high-risk jurisdictions"],
-        narrative: "The customer exhibited transaction patterns consistent with money laundering typologies. Multiple deposits were made just below the reporting threshold, followed by rapid wire transfers to offshore accounts.",
+        behavioralDeviations: ["Unusual transaction volume", "New beneficiary pattern", "Rapid domestic fund movement"],
+        narrative: "The customer exhibited transaction patterns consistent with money laundering typologies. Multiple deposits were made just below the reporting threshold, followed by rapid domestic transfers across Nigerian accounts.",
         riskClassification: riskClassifications,
         supportingDocuments: [],
-        status: statuses[i % statuses.length],
+        status,
         caseId: c?.id,
         submittedById: users[1].id,
-        submittedDate: new Date(Date.now() - i * 86400000),
+        submittedDate: status === "DRAFT" ? null : new Date(Date.now() - i * 86400000),
       },
     });
   }
@@ -527,7 +666,9 @@ async function main() {
     },
   });
 
-  console.log("  Created 8 STR submissions, including one end-to-end happy path");
+  console.log(
+    `  Created ${SEEDED_STR_SUBMISSION_COUNT} STR submissions, including one end-to-end happy path and ${SEEDED_DRAFT_STR_COUNT} draft`
+  );
 
   // ─── Create Activity Logs ───────────────────────────────────────────
   runningStep("creating activity logs");

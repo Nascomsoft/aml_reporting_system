@@ -10,7 +10,6 @@ export interface FlagResult {
 }
 
 const highRiskCountries = [
-  "Nigeria",
   "Pakistan",
   "Myanmar",
   "Zimbabwe",
@@ -95,15 +94,17 @@ function evaluateSingleRule(
     triggered = evaluateVelocityRule(rule, transaction);
   }
 
-  // Calculate risk score based on rule severity and weight
+  // Calculate risk score based on rule severity and weight. Keep demo scores
+  // varied instead of letting every serious flag saturate at 100.
   const riskScore = triggered
     ? baseRiskScore +
-      getSeverityWeight(rule.severity) * rule.riskWeight * 30 // 30 point base increment
+      getSeverityWeight(rule.severity) * rule.riskWeight * 8 +
+      getDeterministicScoreJitter(transaction)
     : baseRiskScore;
 
   return {
     triggered,
-    riskScore: Math.min(riskScore, 100), // Cap at 100
+    riskScore: Math.min(Math.round(riskScore), 96),
   };
 }
 
@@ -121,6 +122,10 @@ function evaluateThresholdRule(
   }
 
   if (!rule.threshold) return false;
+
+  if (ruleName.includes("cash") && transaction.transactionType !== "CASH") {
+    return false;
+  }
 
   // Check if transaction amount exceeds threshold
   if (transaction.amount > rule.threshold) {
@@ -154,9 +159,12 @@ function evaluatePatternRule(
 
   // Dormant account reactivation
   if (ruleName.includes("dormant")) {
-    // In a real system, this would check account history
-    // For simulation, we'll check if using random dormancy indicator
-    return Math.random() < 0.05; // 5% chance for demo
+    if (transaction.metadata && typeof transaction.metadata === "object") {
+      const meta = transaction.metadata as { dormantReactivation?: boolean };
+      return meta.dormantReactivation === true;
+    }
+
+    return false;
   }
 
   // Circular transaction pattern
@@ -231,7 +239,6 @@ function calculateBaseRiskScore(
   // Country risk (basic)
   const riskCountries = [
     "Pakistan",
-    "Nigeria",
     "Myanmar",
     "Zimbabwe",
     "Sudan",
@@ -278,6 +285,16 @@ function getSeverityWeight(severity: string): number {
     LOW: 0.5,
   };
   return weights[severity?.toUpperCase()] || 1;
+}
+
+function getDeterministicScoreJitter(
+  transaction: Omit<Transaction, "id" | "createdAt">
+): number {
+  const refSeed = transaction.transactionRef
+    .split("")
+    .reduce((sum, char) => sum + char.charCodeAt(0), 0);
+
+  return refSeed % 9;
 }
 
 /**

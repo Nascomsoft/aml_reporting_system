@@ -40,6 +40,42 @@ interface TransactionResponse {
   offset: number;
 }
 
+function getPaginationItems(currentPage: number, totalPages: number): Array<number | "ellipsis"> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  const pages = new Set<number>([1, totalPages]);
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
+
+  for (let p = start; p <= end; p++) {
+    pages.add(p);
+  }
+
+  const sortedPages = Array.from(pages).sort((a, b) => a - b);
+  const items: Array<number | "ellipsis"> = [];
+
+  sortedPages.forEach((p, index) => {
+    const previous = sortedPages[index - 1];
+
+    if (previous && p - previous > 1) {
+      items.push("ellipsis");
+    }
+
+    items.push(p);
+  });
+
+  return items;
+}
+
+function formatTransactionDate(value: string) {
+  return new Intl.DateTimeFormat("en-NG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
 export default function TransactionsPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -63,6 +99,8 @@ export default function TransactionsPage() {
 
   const limit = 20;
   const offset = (page - 1) * limit;
+  const totalPages = Math.ceil(total / limit);
+  const paginationItems = getPaginationItems(page, totalPages);
 
   const fetchTransactions = useCallback(async () => {
     try {
@@ -294,6 +332,7 @@ export default function TransactionsPage() {
 
   const tableColumns = [
     { header: "Ref", accessor: "transactionRef", width: "10%" },
+    { header: "Date", accessor: "date", width: "12%", format: formatTransactionDate },
     { header: "Customer", accessor: "customerName", width: "15%" },
     { header: "Occupation", accessor: "occupation", width: "12%" },
     { header: "Account", accessor: "accountNumber", width: "12%" },
@@ -326,8 +365,6 @@ export default function TransactionsPage() {
   if (user?.role !== "compliance_officer") {
     tableColumns.splice(4, 0, { header: "Institution", accessor: "institution.name", width: "12%" });
   }
-
-  const totalPages = Math.ceil(total / limit);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -485,18 +522,24 @@ export default function TransactionsPage() {
                 ← Previous
               </Button>
 
-              <div className="flex gap-2">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setPage(p)}
-                    className={`px-3 py-1 rounded text-sm font-medium ${
-                      p === page ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-900 hover:bg-gray-200"
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
+              <div className="flex flex-wrap justify-center gap-2 px-3">
+                {paginationItems.map((item, index) =>
+                  item === "ellipsis" ? (
+                    <span key={`ellipsis-${index}`} className="px-2 py-1 text-sm text-gray-500">
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      onClick={() => setPage(item)}
+                      className={`px-3 py-1 rounded text-sm font-medium ${
+                        item === page ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-900 hover:bg-gray-200"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
               </div>
 
               <Button

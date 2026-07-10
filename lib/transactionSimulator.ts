@@ -1,6 +1,7 @@
 import { Transaction, TransactionType, Institution } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { occupationCategories } from "./occupationCatalog";
+import { applyScreeningResult } from "@/lib/amlScreening";
 
 /**
  * Generate realistic transaction data for simulation
@@ -12,6 +13,7 @@ export function generateRealisticTransaction(
     accountNumber?: string;
     amount?: number;
     occupation?: string;
+    forceSuspicious?: boolean;
   }
 ): Omit<Transaction, "id" | "createdAt"> {
   const transactionTypes: TransactionType[] = [
@@ -21,22 +23,6 @@ export function generateRealisticTransaction(
     "WIRE",
     "CASH",
     "CHECK",
-  ];
-
-  const countries = [
-    "Nigeria",
-    "Ghana",
-    "Kenya",
-    "South Africa",
-    "UAE",
-    "UK",
-    "USA",
-    "Singapore",
-    "Pakistan",
-    "India",
-    "Bangladesh",
-    "Philippines",
-    "Mexico",
   ];
 
   const customerFirstNames = [
@@ -51,10 +37,10 @@ export function generateRealisticTransaction(
     "Chioma",
     "Oluwaseun",
     "Amina",
-    "Kwesi",
-    "Asha",
-    "Kofi",
     "Zainab",
+    "Temitope",
+    "Nnamdi",
+    "Hadiza",
   ];
 
   const customerLastNames = [
@@ -63,32 +49,22 @@ export function generateRealisticTransaction(
     "Hassan",
     "Ojomo",
     "Adeyemi",
-    "Mwangi",
-    "Patel",
-    "Khan",
     "Achebe",
-    "Okonwo",
+    "Okonkwo",
     "Ibrahim",
-    "Benin",
-    "Kariuki",
+    "Bello",
+    "Balogun",
+    "Abubakar",
+    "Eze",
   ];
 
   // Generate amounts with realistic distribution
   // Most transactions between 10k-500k, some larger structural amounts
   let amount = options?.amount ?? generateAmount();
 
-  // Ensure diverse transaction types
-  const transactionType =
+  const suspicious = options?.forceSuspicious ?? Math.random() < 0.3;
+  let transactionType =
     transactionTypes[Math.floor(Math.random() * transactionTypes.length)];
-
-  // Sometimes generate suspicious structuring amounts (just under thresholds)
-  if (Math.random() < 0.1) {
-    // 10% chance of suspicious amount
-    const thresholds = [100000, 50000, 10000];
-    const baseThreshold =
-      thresholds[Math.floor(Math.random() * thresholds.length)];
-    amount = baseThreshold - Math.floor(Math.random() * 1000); // Just under threshold
-  }
 
   const accountNumber = options?.accountNumber ?? generateAccountNumber();
   const customerName =
@@ -99,8 +75,7 @@ export function generateRealisticTransaction(
     occupationCategories[Math.floor(Math.random() * occupationCategories.length)];
 
   const transactionRef = generateTransactionRef();
-  const country =
-    countries[Math.floor(Math.random() * countries.length)];
+  const country = "Nigeria";
 
   // Add metadata for pattern detection
   const metadata: Record<string, unknown> = {
@@ -108,14 +83,43 @@ export function generateRealisticTransaction(
     generatedAt: new Date().toISOString(),
   };
 
-  // Sometimes mark as circular pattern
-  if (Math.random() < 0.05) {
-    metadata.circular = true;
-  }
+  if (suspicious) {
+    const pattern = Math.floor(Math.random() * 5);
 
-  // Sometimes mark as high velocity (for velocity rules)
-  if (Math.random() < 0.08) {
-    metadata.velocity = Math.floor(Math.random() * 10) + 3; // 3-12 transactions
+    if (pattern === 0) {
+      transactionType = "CASH";
+      amount = Math.floor(Math.random() * 650000) + 125000;
+      metadata.suspiciousPattern = "large_cash_transaction";
+    } else if (pattern === 1) {
+      amount = 90000 + Math.floor(Math.random() * 10000);
+      metadata.suspiciousPattern = "structuring";
+    } else if (pattern === 2) {
+      transactionType = Math.random() < 0.5 ? "TRANSFER" : "WIRE";
+      metadata.velocity = Math.floor(Math.random() * 7) + 6;
+      amount = Math.floor(Math.random() * 350000) + 75000;
+      metadata.suspiciousPattern = "rapid_fund_movement";
+    } else if (pattern === 3) {
+      transactionType = Math.random() < 0.5 ? "TRANSFER" : "WIRE";
+      metadata.circular = true;
+      amount = Math.floor(Math.random() * 500000) + 100000;
+      metadata.suspiciousPattern = "circular_transaction";
+    } else {
+      metadata.dormantReactivation = true;
+      amount = Math.floor(Math.random() * 300000) + 50000;
+      metadata.suspiciousPattern = "dormant_account_reactivation";
+    }
+  } else {
+    if (transactionType === "CASH" && amount > 95000) {
+      amount = Math.floor(Math.random() * 85000) + 5000;
+    }
+
+    if (amount >= 90000 && amount <= 99999) {
+      amount = Math.floor(Math.random() * 75000) + 10000;
+    }
+
+    if (amount >= 9000 && amount <= 9900) {
+      amount = Math.floor(Math.random() * 65000) + 10000;
+    }
   }
 
   return {
@@ -224,44 +228,16 @@ export async function simulateTransaction(
   // Evaluate against rules
   const flagResult = await ruleEvaluator(transaction);
 
-  // Create the transaction with flag results
   const createdTransaction = await prisma.transaction.create({
     data: {
       ...transaction,
-      status: flagResult.isFlagged ? "FLAGGED" : "NORMAL",
-      riskScore: flagResult.riskScore,
-      flagReason: flagResult.ruleName || null,
-    },
-    include: {
-      institution: {
-        select: { id: true, name: true, code: true },
-      },
+      status: "NORMAL",
+      riskScore: 0,
+      flagReason: null,
     },
   });
 
-  // If flagged, optionally create an Alert
-  if (flagResult.isFlagged) {
-    await prisma.alert.create({
-      data: {
-        title: `Flag: ${flagResult.ruleName}`,
-        description: `Transaction ${createdTransaction.transactionRef} triggered ${flagResult.ruleName}`,
-        severity: (flagResult.severity || "MEDIUM") as Parameters<typeof prisma.alert.create>[0]["data"]["severity"],
-        lifecycleStage: "NEW",
-        riskScore: flagResult.riskScore,
-        amount: createdTransaction.amount,
-        customerName: createdTransaction.customerName,
-        accountNumber: createdTransaction.accountNumber,
-        occupation: createdTransaction.occupation,
-        ruleTriggered: flagResult.ruleName || "Unknown",
-        institutionId: institution.id,
-        flagReason: flagResult.ruleName,
-        country: createdTransaction.country,
-        transactionIds: [createdTransaction.id],
-      },
-    });
-  }
-
-  return createdTransaction;
+  return applyScreeningResult(createdTransaction, flagResult);
 }
 
 /**
